@@ -1,0 +1,11 @@
+# Landsat LAI and Thermal-sharpening algorithms for DisAlexi
+
+## Landsat LAI
+The Landsat based LAI estimation algorithm employs a machine learning approach that uses MODIS LAI as a reference data source. This algorithm is primarily driven by an extensive training sample set of MODIS LAI and Landsat surface reflectance, generated using Landsat SR and MODIS LAI images over 2006 to 2018. Each sample was extracted at MODIS resolution (500m), and the MODIS LAI, aggregated Landsat surface reflectance, as well as NLCD land cover type were recorded. For a Landsat SR image, the algorithm will first draw the training set (saved as a GEE asset), train random forest models, and then the apply to the Landsat image. For the random forest model, the feature space includes Landsat surface reflectance in red, green, NIR and SWIR1 bands, Normalized Difference Vegetation Index (NDVI), Normalized Different Water Index (NDWI), the geographic coordinates, and the sun viewing angle of the Landsat scene. The target variable is MODIS LAI. Separate models are built for each Landsat sensor and individual biomes. There are eight predefined biome types based on NLCD. Each training operation involves around 40,000 to 60,000 samples.
+
+## Thermal-sharpening
+The thermal sharpening algorithm is developed for Landsat 5, 7, and 8. The algorithm has three components.  
+
+* **Global process**: first, a random forest model is built using spatially homogeneous samples selected from the whole Landsat scene. To achieve this, the shortwave spectral bands (30m) are first aggregated to match the resolution of the TIR band. Pixels with low spatial heterogeneity are selected to build a random forest regressor between shortwave surface reflectance and TIR brightness temperature.  
+* **Local process**: second, local models are built for each aggregated pixel using a moving window (neighbor analysis) with a predefined size. Homogeneous pixels within the window are used to establish simple linear regression between shortwave surface reflectance and TIR brightness temperature.  
+* **Residual redistribution**: finally, both local and global results are aggregated to and compared to the TIR band. The final model is computed as a linear combination of the local and global results using the reversed squared residual as weights. 
