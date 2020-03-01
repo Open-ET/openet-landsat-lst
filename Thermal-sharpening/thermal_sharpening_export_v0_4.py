@@ -257,7 +257,7 @@ def main(argv):
   end_year = int(argv[4])
   pathrow = str(path).zfill(3)+str(row).zfill(3)
   
-  assetDir = 'projects/disalexi/example_data/LST/LST_'+pathrow'_v1/'
+  assetDir = 'projects/disalexi/example_data/LST/LST_'+pathrow+'_v1/'
 
   start = str(start_year)+'-01-01'
   end = str(end_year+1)+'-01-01'
