@@ -3,7 +3,7 @@
 """
 Created on Tue Feb 19 16:33:56 2020
 
-Genearl sharpened thermal band for a Landsat image
+General sharpened thermal band for a Landsat image
 Export thermal sharpening results to a asset image collection
 
 Method overview:
@@ -18,9 +18,12 @@ Update:
 
 @author: kangyanghui
 """
-
-import ee; ee.Initialize()
 import sys
+
+import ee
+
+ee.Initialize()
+
 
 def getQABits(image, start, end, newName):
     
@@ -30,7 +33,7 @@ def getQABits(image, start, end, newName):
   # Compute the bits we need to extract.
   pattern = 0
   for i in range(start, end + 1):
-      pattern = pattern + 2**i
+      pattern = pattern + 2 ** i
 
   # Return a single band image of the extracted QA bits, giving the band
   # a new name.
@@ -39,7 +42,7 @@ def getQABits(image, start, end, newName):
 
 def qaLandsat(image):
   """
-  Apply cloud masking to a Lndsat image
+  Apply cloud masking to a Landsat image
   """
   pixelQA = image.select('pixel_qa')
   clear = getQABits(pixelQA, 1, 1, 'clear')
@@ -65,25 +68,26 @@ def getLandsat(start, end, path, row):
 
   # Set up bands and corresponding band names
   sensorBandDict = {
-    'L8': ee.List([1,2,3,4,5,7,6,'pixel_qa']),
-    'L7': ee.List([0,1,2,3,4,5,6,'pixel_qa']),
-    'L5': ee.List([0,1,2,3,4,5,6,'pixel_qa']),
-  };
+    'L8': ee.List([1, 2, 3, 4, 5, 7, 6, 'pixel_qa']),
+    'L7': ee.List([0, 1, 2, 3, 4, 5, 6, 'pixel_qa']),
+    'L5': ee.List([0, 1, 2, 3, 4, 5, 6, 'pixel_qa']),
+  }
 
   # Set up collections
   collectionDict = {
     'L8': 'LANDSAT/LC08/C01/T1_SR',
     'L7': 'LANDSAT/LE07/C01/T1_SR',
     'L5': 'LANDSAT/LT05/C01/T1_SR',
-  };
+  }
 
-  sensorBandName = ['blue','green','red','nir','swir1','tir', 'swir2','pixel_qa'];
+  sensorBandName = [
+      'blue', 'green', 'red', 'nir', 'swir1', 'tir', 'swir2', 'pixel_qa']
 
   # Landsat 8
   Landsat8_sr = ee.ImageCollection(collectionDict['L8']) \
     .filterDate(start, end) \
-    .filterMetadata('WRS_PATH','equals',path) \
-    .filterMetadata('WRS_ROW','equals',row) \
+    .filterMetadata('WRS_PATH', 'equals', path) \
+    .filterMetadata('WRS_ROW', 'equals', row) \
     .filterMetadata('CLOUD_COVER','less_than',70) \
     .select(sensorBandDict['L8'], sensorBandName) \
     .map(qaLandsat)
@@ -91,20 +95,20 @@ def getLandsat(start, end, path, row):
   # Landsat 7
   Landsat7_sr = ee.ImageCollection(collectionDict['L7'])  \
     .filterDate(start, end) \
-    .filterMetadata('WRS_PATH','equals',path) \
-    .filterMetadata('WRS_ROW','equals',row) \
-    .filterMetadata('CLOUD_COVER','less_than',70) \
+    .filterMetadata('WRS_PATH', 'equals', path) \
+    .filterMetadata('WRS_ROW', 'equals', row) \
+    .filterMetadata('CLOUD_COVER', 'less_than', 70) \
     .select(sensorBandDict['L7'], sensorBandName) \
     .map(qaLandsat)
 
   # Landsat 5  
   Landsat5_sr = ee.ImageCollection(collectionDict['L5']) \
-      .filterDate(start, end) \
-      .filterMetadata('WRS_PATH','equals',path) \
-      .filterMetadata('WRS_ROW','equals',row) \
-      .filterMetadata('CLOUD_COVER','less_than',70) \
-      .select(sensorBandDict['L5'], sensorBandName) \
-      .map(qaLandsat)
+    .filterDate(start, end) \
+    .filterMetadata('WRS_PATH', 'equals', path) \
+    .filterMetadata('WRS_ROW', 'equals', row) \
+    .filterMetadata('CLOUD_COVER', 'less_than', 70) \
+    .select(sensorBandDict['L5'], sensorBandName) \
+    .map(qaLandsat)
 
   Landsat_sr_coll = Landsat8_sr.merge(Landsat5_sr).merge(Landsat7_sr)
 
@@ -120,38 +124,41 @@ def thermalSharpening(image):
   """
 
   # settings
-  tir_res_dict = ee.Dictionary({'LANDSAT_5':120,'LANDSAT_7':60,'LANDSAT_8':100})
+  tir_res_dict = ee.Dictionary({
+    'LANDSAT_5': 120, 'LANDSAT_7': 60, 'LANDSAT_8': 100})
   tir_res = tir_res_dict.get(image.get('SATELLITE'))
   # high_res = 30
 
   kernel_size = 20  # kernel radius for local linear regression, 
-                    # lower values for more heterogenous areas
-  cv_threshold = 0.15  # threshold to select homogenous pixels
-  bands = ['blue','green','red','nir','swir1','swir2']  # predictor bands
+                    # lower values for more heterogeneous areas
+  cv_threshold = 0.15  # threshold to select homogeneous pixels
+  bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']  # predictor bands
 
   bound = image.geometry()
   crs = image.projection().crs()
   transform = getAffineTransform(image)
 
-  # aggregate the TIR band (result of the cubic convulution interpolation)
+  # aggregate the TIR band (result of the cubic convolution interpolation)
+  # convert to brightness temperature or radiance
   tir = image.select(['tir']) \
-    .reduceResolution(reducer=ee.Reducer.mean(),bestEffort=True) \
-    .reproject(crs=crs,scale=tir_res) \
-    .divide(10).pow(4)  # convert to brightness temperature or radiance 
+    .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
+    .reproject(crs=crs, scale=tir_res) \
+    .divide(10).pow(4)
 
   # aggregating predictor bands for mean value
   other = image.select(bands)
   other_mean = other \
-      .reduceResolution(reducer=ee.Reducer.mean(),bestEffort=True) \
-      .reproject(crs=crs,scale=tir_res)
+    .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
+    .reproject(crs=crs, scale=tir_res)
 
   # aggregating predictor bands for std value
   other_std = other \
-    .reduceResolution(reducer=ee.Reducer.stdDev(),bestEffort=True) \
-    .reproject(crs=crs,scale=tir_res)
+    .reduceResolution(reducer=ee.Reducer.stdDev(), bestEffort=True) \
+    .reproject(crs=crs, scale=tir_res)
 
   # compute the coefficient of variation of sub-pixel reflectance
-  other_cv = other_std.divide(other_mean).reduce(ee.Reducer.mean()).rename(['mean_cv'])
+  other_cv = other_std.divide(other_mean).reduce(ee.Reducer.mean()) \
+    .rename(['mean_cv'])
 
   # add a bias band (=1) to the image for linear regression reducer
   image_agg = other_mean \
@@ -163,18 +170,20 @@ def thermalSharpening(image):
   # Y: tir (power 4)
   # X: SR Bands
   kernel = ee.Kernel.square(kernel_size)
-  local_fit = image_agg.reduceNeighborhood(ee.Reducer.linearRegression(len(bands)+1,1), kernel, None, False)
+  local_fit = image_agg.reduceNeighborhood(
+    ee.Reducer.linearRegression(len(bands) + 1, 1), kernel, None, False)
 
   # extract coefficients
+  # use crsTransform instead of scale to avoid misalignment
   band_names = bands.copy()
   band_names.extend(['bias'])
   coefficients = local_fit.select('coefficients').arrayProject([0]) \
     .arrayFlatten([band_names]) \
-    .reproject(crs,transform) # use crsTransform instead of scale to avoid misalignment
+    .reproject(crs, transform)
 
   rmse = local_fit.select('residuals').arrayFlatten([['residuals']]).pow(0.25)
 
-  # Apply linear fit at high resolution for shaprened TIR
+  # Apply linear fit at high resolution for sharpened TIR
   inputs = image.select(bands).addBands(ee.Image(1).clip(bound).rename(['bias']))
   tir_sp_local = inputs.multiply(coefficients).reduce(ee.Reducer.sum()).pow(0.25)
 
@@ -186,7 +195,7 @@ def thermalSharpening(image):
 
   rf = ee.Classifier.randomForest(100, 4, 50) \
     .setOutputMode('REGRESSION') \
-    .train(samples,'tir',bands)
+    .train(samples, 'tir', bands)
 
   # Apply RF to local resolution (SR bands)
   tir_sp_global = image.classify(rf, 'tir_pred').pow(0.25)
@@ -194,13 +203,13 @@ def thermalSharpening(image):
   """ Residual analysis """
   # aggregate local model results to tir resolution
   local_agg = tir_sp_local.pow(4) \
-    .reduceResolution(reducer=ee.Reducer.mean(),bestEffort=True) \
-    .reproject(crs=crs,scale=tir_res).pow(0.25)
+    .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
+    .reproject(crs=crs, scale=tir_res).pow(0.25)
 
   # aggregate global model results to tir resolution
   global_agg = tir_sp_global.pow(4) \
-    .reduceResolution(reducer=ee.Reducer.mean(),bestEffort=True) \
-    .reproject(crs=crs,scale=tir_res).pow(0.25)
+    .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
+    .reproject(crs=crs, scale=tir_res).pow(0.25)
 
   # compute weights based on residuals at coarese resolution
   res_local = local_agg.pow(4).subtract(tir).abs()
@@ -210,16 +219,21 @@ def thermalSharpening(image):
   weight_local = res_local_part.divide(res_local_part.add(res_global_part))
   weight_global = res_global_part.divide(res_local_part.add(res_global_part))
 
-  valid_mask = res_local.gt(0).multiply(res_global.gt(0)) # no residual equals to 0
+  # no residual equals to 0
+  valid_mask = res_local.gt(0).multiply(res_global.gt(0))
 
   # compute weighted average of local and global model results
+  # weighted sum
   tir_sp_final = tir_sp_local.pow(4).multiply(weight_local) \
-      .add(tir_sp_global.pow(4).multiply(weight_global)).multiply(valid_mask).pow(0.25)  # weighted sum
-  tir_sp_final = tir_sp_final.add(tir_sp_local.multiply(res_local.eq(0)))  # local residual is 0
-  tir_sp_final = tir_sp_final.add(tir_sp_global.multiply(res_global.eq(0)))  # global residual is 0
+    .add(tir_sp_global.pow(4).multiply(weight_global))\
+    .multiply(valid_mask).pow(0.25)
+  # local residual is 0
+  tir_sp_final = tir_sp_final.add(tir_sp_local.multiply(res_local.eq(0)))
+  # global residual is 0
+  tir_sp_final = tir_sp_final.add(tir_sp_global.multiply(res_global.eq(0)))
 
   # prepare output
-  out = tir_sp_final.rename(['tir_sharpend'])
+  out = tir_sp_final.rename(['tir_sharpened'])
   
   out = out.addBands(image.select('tir').divide(10).rename(['tir_original'])) \
     .addBands(tir.pow(0.25).rename(['tir_agg'])) \
@@ -230,11 +244,15 @@ def thermalSharpening(image):
     .addBands(weight_local.rename(['local_weights'])) \
     .addBands(rmse.rename(['slr_rmse']))
 
-  out = out.reproject(crs,transform)  # need to reproject to original crs with transform to avoid misalignment
+  # need to reproject to original crs with transform to avoid misalignment
+  out = out.reproject(crs, transform)
   
   out = out.clip(bound).multiply(10).int16()
 
-  return ee.Image(out.copyProperties(image).set('system:time_start',image.get('system:time_start')))
+  out = out.copyProperties(image) \
+    .set('system:time_start', image.get('system:time_start'))
+
+  return ee.Image(out)
 
 
 def getSharpenedTir(start, end, path, row):
@@ -257,10 +275,10 @@ def main(argv):
   end_year = int(argv[4])
   pathrow = str(path).zfill(3)+str(row).zfill(3)
   
-  assetDir = 'projects/disalexi/example_data/LST/LST_'+pathrow+'_v1/'
+  assetDir = 'projects/disalexi/example_data/LST/LST_' + pathrow + '_v1/'
 
-  start = str(start_year)+'-01-01'
-  end = str(end_year+1)+'-01-01'
+  start = str(start_year) + '-01-01'
+  end = str(end_year+1) + '-01-01'
 
   landsat_coll = getLandsat(start, end, path, row)
   landsat_coll = landsat_coll.sort('system:time_start')
@@ -274,51 +292,51 @@ def main(argv):
 
   for i in range(n):
 
-      landsat_image = ee.Image(landsat_coll.toList(5000).get(i))
+    landsat_image = ee.Image(landsat_coll.toList(5000).get(i))
 
-      tir_sp_image = thermalSharpening(landsat_image)
+    tir_sp_image = thermalSharpening(landsat_image)
 
-      eedate = ee.Date(landsat_image.get('system:time_start'))
-      date = eedate.format('YYYYMMdd').getInfo()
+    eedate = ee.Date(landsat_image.get('system:time_start'))
+    date = eedate.format('YYYYMMdd').getInfo()
 
-      sensor_dict = {'LANDSAT_5':'LT05','LANDSAT_7':'LE07','LANDSAT_8':'LC08'}
-      sensor = landsat_image.get('SATELLITE').getInfo()
-      sensor = sensor_dict[sensor]
+    sensor_dict = {'LANDSAT_5': 'LT05', 'LANDSAT_7': 'LE07', 'LANDSAT_8': 'LC08'}
+    sensor = landsat_image.get('SATELLITE').getInfo()
+    sensor = sensor_dict[sensor]
 
-      proj = landsat_image.select([0]).projection().getInfo()
-      crs = proj['crs']
-      # transform = ee.Projection(landsat_image.select([0]).projection()).transform().getInfo()
-      transform = proj['transform']
-      scale = ee.Projection(landsat_image.select([0]).projection()).nominalScale().getInfo()
-      print(date, crs, scale, str(transform))
-      
-      # date = laiImage.get('date')
-      # outname = 'LAI_' + date.getInfo()
-      # print(outname)
-      outname = 'LST_' + pathrow + '_' + date + '_' + sensor + '_v1'
-      print(outname)
+    proj = landsat_image.select([0]).projection().getInfo()
+    crs = proj['crs']
+    # transform = ee.Projection(landsat_image.select([0]).projection()).transform().getInfo()
+    transform = proj['transform']
+    scale = ee.Projection(landsat_image.select([0]).projection()).nominalScale().getInfo()
+    print(date, crs, scale, str(transform))
 
-      # export window (small)
-      """
-      subset = ee.Geometry.Polygon([[[-122.00927602072072, 38.890298881752535],
-            [-122.00927602072072, 38.855684804880134],
-            [-121.95777760763478, 38.855684804880134],
-            [-121.95777760763478, 38.890298881752535]]], None, False)
-      """
+    # date = laiImage.get('date')
+    # outname = 'LAI_' + date.getInfo()
+    # print(outname)
+    outname = 'LST_' + pathrow + '_' + date + '_' + sensor + '_v1'
+    print(outname)
 
-      task = ee.batch.Export.image.toAsset(image = tir_sp_image,
-                                           description = outname,
-                                           assetId = assetDir+outname,
-                                           # region = subset.getInfo()['coordinates'],
-                                           crs = crs,
-                                           # scale = scale)
-                                           crsTransform = str(transform)) # the input has to be a string '[a,b,c]'
-        
-      task.start()  # submit task
-      task_id = task.id
-      print(task_id,outname)
-      
-      sys.stdout.flush()
+    # export window (small)
+    """
+    subset = ee.Geometry.Polygon([[[-122.00927602072072, 38.890298881752535],
+          [-122.00927602072072, 38.855684804880134],
+          [-121.95777760763478, 38.855684804880134],
+          [-121.95777760763478, 38.890298881752535]]], None, False)
+    """
+
+    task = ee.batch.Export.image.toAsset(image=tir_sp_image,
+                                         description=outname,
+                                         assetId=assetDir+outname,
+                                         # region=subset.getInfo()['coordinates'],
+                                         crs=crs,
+                                         # scale=scale)
+                                         crsTransform=str(transform)) # the input has to be a string '[a,b,c]'
+
+    task.start()  # submit task
+    task_id = task.id
+    print(task_id,outname)
+
+    sys.stdout.flush()
 
 if __name__ == "__main__":
   main(sys.argv)
