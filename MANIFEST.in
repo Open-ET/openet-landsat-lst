@@ -1,0 +1,5 @@
+exclude *.txt
+include README.md setup.py
+recursive-include openet *
+global-exclude *.py[co]
+global-exclude __pycache__
