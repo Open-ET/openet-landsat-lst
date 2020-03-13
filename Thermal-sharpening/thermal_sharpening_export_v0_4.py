@@ -33,7 +33,7 @@ def getQABits(image, start, end, newName):
   # Compute the bits we need to extract.
   pattern = 0
   for i in range(start, end + 1):
-      pattern = pattern + 2 ** i
+    pattern = pattern + 2 ** i
 
   # Return a single band image of the extracted QA bits, giving the band
   # a new name.
@@ -81,7 +81,7 @@ def getLandsat(start, end, path, row):
   }
 
   sensorBandName = [
-      'blue', 'green', 'red', 'nir', 'swir1', 'tir', 'swir2', 'pixel_qa']
+    'blue', 'green', 'red', 'nir', 'swir1', 'tir', 'swir2', 'pixel_qa']
 
   # Landsat 8
   Landsat8_sr = ee.ImageCollection(collectionDict['L8']) \
@@ -126,7 +126,7 @@ def thermalSharpening(image):
   # settings
   tir_res_dict = ee.Dictionary({
     'LANDSAT_5': 120, 'LANDSAT_7': 60, 'LANDSAT_8': 100})
-  tir_res = tir_res_dict.get(image.get('SATELLITE'))
+  tir_res = ee.Number(tir_res_dict.get(image.get('SATELLITE')))
   # high_res = 30
 
   kernel_size = 20  # kernel radius for local linear regression, 
@@ -137,6 +137,8 @@ def thermalSharpening(image):
   bound = image.geometry()
   crs = image.projection().crs()
   transform = getAffineTransform(image)
+
+  tir_transform = transform.set(0, tir_res).set(4, tir_res.multiply(-1))
 
   # aggregate the TIR band (result of the cubic convolution interpolation)
   # convert to brightness temperature or radiance
