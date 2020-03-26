@@ -3,6 +3,8 @@ import ee
 from . import utils
 
 
+# TODO: Move the "calculation" steps to a separate function
+#   Conceptually structure this like there were separate SR and TOA functions
 def landsat(image):
     """Thermal sharpening algorithm
 
@@ -117,7 +119,7 @@ def landsat(image):
         .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
         .reproject(crs=crs, scale=tir_res).pow(0.25)
 
-    # Compute weights based on residuals at coarese resolution
+    # Compute weights based on residuals at coarse resolution
     res_local = local_agg.pow(4).subtract(tir).abs()
     res_global = global_agg.pow(4).subtract(tir).abs()
     res_local_part = ee.Image(1).divide(res_local.pow(2))
@@ -129,18 +131,19 @@ def landsat(image):
     valid_mask = res_local.gt(0).multiply(res_global.gt(0))
 
     # Compute weighted average of local and global model results
-    # weighted sum
+    # Weighted sum
     tir_sp_final = tir_sp_local.pow(4).multiply(weight_local) \
         .add(tir_sp_global.pow(4).multiply(weight_global)) \
         .multiply(valid_mask).pow(0.25)
-    # local residual is 0
+    # Local residual is 0
     tir_sp_final = tir_sp_final.add(tir_sp_local.multiply(res_local.eq(0)))
-    # global residual is 0
+    # Global residual is 0
     tir_sp_final = tir_sp_final.add(tir_sp_global.multiply(res_global.eq(0)))
 
     # Prepare output
     out = tir_sp_final.rename(['tir_sharpened'])
 
+    # TODO: Add flag/parameter to control if all bands are exported
     out = out.addBands(image.select('tir').rename(['tir_original'])) \
         .addBands(tir.pow(0.25).rename(['tir_agg'])) \
         .addBands(tir_sp_local.rename(['tir_sp_local'])) \
@@ -150,7 +153,7 @@ def landsat(image):
         .addBands(weight_local.rename(['local_weights'])) \
         .addBands(rmse.rename(['slr_rmse']))
 
-    # need to reproject to original crs with transform to avoid misalignment
+    # Need to reproject to original crs with transform to avoid misalignment
     out = out.reproject(crs, transform)
 
     out = out.clip(bound)
