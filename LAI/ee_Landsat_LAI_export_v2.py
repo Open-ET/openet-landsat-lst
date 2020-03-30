@@ -119,11 +119,14 @@ def getRFModel(sensor, biome, threshold):
                              train.filterMetadata('biome2','equals',biome))
   
     # percentage of saturated samples to use
-    train = ee.FeatureCollection(train);
+    train = ee.FeatureCollection(train)
+
+    """
     train = train.filterMetadata('mcd_qa','equals',1) \
                  .filterMetadata('random','less_than',threshold) \
                  .merge(train.filterMetadata('mcd_qa','equals',0))
-  
+  	"""
+
     # train
     features = ['red','green','nir','swir1','lat','lon','NDVI','NDWI','sun_zenith','sun_azimuth']
     rf = trainRF(train, features, 'MCD_LAI')
