@@ -70,7 +70,7 @@ def landsat(image):
     image_agg = other_mean \
         .addBands(other_mean.select([0]).multiply(0).add(1).rename(['bias'])) \
         .addBands(tir) \
-        .clip(bound)
+    #     .clip(bound)
 
     # Fit moving-window linear regressions at coarse resolution
     # Y: tir (power 4)
