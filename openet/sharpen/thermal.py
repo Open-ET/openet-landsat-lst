@@ -68,7 +68,7 @@ def landsat(image):
 
     # Add a bias band (=1) to the image for linear regression reducer
     image_agg = other_mean \
-        .addBands(ee.Image(1).clip(bound).rename(['bias'])) \
+        .addBands(other_mean.select([0]).multiply(0).add(1).rename(['bias'])) \
         .addBands(tir) \
         .clip(bound)
 
@@ -90,9 +90,9 @@ def landsat(image):
     rmse = local_fit.select('residuals').arrayFlatten([['residuals']]).pow(0.25)
 
     # Apply linear fit at high resolution for sharpened TIR
-    inputs = image.select(bands).addBands(
-        ee.Image(1).clip(bound).rename(['bias']))
-    tir_sp_local = inputs.multiply(coefficients).reduce(ee.Reducer.sum())\
+    inputs = image.select(bands) \
+        .addBands(image.select([0]).multiply(0).add(1).rename(['bias']))
+    tir_sp_local = inputs.multiply(coefficients).reduce(ee.Reducer.sum()) \
         .pow(0.25)
 
     # Fit a scene-wise random forest model
@@ -112,12 +112,14 @@ def landsat(image):
     # Aggregate local model results to tir resolution
     local_agg = tir_sp_local.pow(4) \
         .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
-        .reproject(crs=crs, scale=tir_res).pow(0.25)
+        .reproject(crs=crs, scale=tir_res) \
+        .pow(0.25)
 
     # Aggregate global model results to tir resolution
     global_agg = tir_sp_global.pow(4) \
         .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
-        .reproject(crs=crs, scale=tir_res).pow(0.25)
+        .reproject(crs=crs, scale=tir_res) \
+        .pow(0.25)
 
     # Compute weights based on residuals at coarse resolution
     res_local = local_agg.pow(4).subtract(tir).abs()
@@ -154,9 +156,10 @@ def landsat(image):
         .addBands(rmse.rename(['slr_rmse']))
 
     # Need to reproject to original crs with transform to avoid misalignment
-    out = out.reproject(crs, transform)
+    out = out.reproject(crs=crs, crsTransform=transform)
 
-    out = out.clip(bound)
+    # CM - Testing out commenting out the final clip call
+    # out = out.clip(bound)
 
     out = out.copyProperties(image) \
         .set('system:time_start', image.get('system:time_start'))
