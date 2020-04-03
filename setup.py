@@ -33,7 +33,7 @@ with open(os.path.join(here, 'README.md')) as f:
 setup(
     name='openet-sharpen',
     version=version,
-    description='Earth Engine based thermal and LAI sharpening functions',
+    description='Earth Engine based thermal sharpening functions',
     long_description=long_description,
     license='Apache',
     author='Yanghui Kang',
@@ -44,9 +44,8 @@ setup(
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     packages=['openet.sharpen'],
-    keywords='Sharpen Earth Engine Landsat Thermal LAI',
+    keywords='Sharpen Earth Engine Landsat Thermal',
     classifiers = [
-        'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7'],
     zip_safe=False,
