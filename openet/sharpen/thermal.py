@@ -70,7 +70,6 @@ def landsat(image):
     image_agg = other_mean \
         .addBands(other_mean.select([0]).multiply(0).add(1).rename(['bias'])) \
         .addBands(tir) \
-    #     .clip(bound)
 
     # Fit moving-window linear regressions at coarse resolution
     # Y: tir (power 4)
@@ -146,14 +145,15 @@ def landsat(image):
     out = tir_sp_final.rename(['tir_sharpened'])
 
     # TODO: Add flag/parameter to control if all bands are exported
-    out = out.addBands(image.select('tir').rename(['tir_original'])) \
-        .addBands(tir.pow(0.25).rename(['tir_agg'])) \
-        .addBands(tir_sp_local.rename(['tir_sp_local'])) \
-        .addBands(tir_sp_global.rename(['tir_sp_global'])) \
-        .addBands(local_agg.rename(['tir_local_agg'])) \
-        .addBands(global_agg.rename(['tir_global_agg'])) \
-        .addBands(weight_local.rename(['local_weights'])) \
-        .addBands(rmse.rename(['slr_rmse']))
+    # CM - Commenting out adding the other bands for now
+    # out = out.addBands(image.select('tir').rename(['tir_original'])) \
+    #     .addBands(tir.pow(0.25).rename(['tir_agg'])) \
+    #     .addBands(tir_sp_local.rename(['tir_sp_local'])) \
+    #     .addBands(tir_sp_global.rename(['tir_sp_global'])) \
+    #     .addBands(local_agg.rename(['tir_local_agg'])) \
+    #     .addBands(global_agg.rename(['tir_global_agg'])) \
+    #     .addBands(weight_local.rename(['local_weights'])) \
+    #     .addBands(rmse.rename(['slr_rmse']))
 
     # Need to reproject to original crs with transform to avoid misalignment
     out = out.reproject(crs=crs, crsTransform=transform)
@@ -161,7 +161,7 @@ def landsat(image):
     # CM - Testing out commenting out the final clip call
     # out = out.clip(bound)
 
-    out = out.copyProperties(image) \
+    out = ee.Image(out.copyProperties(image)) \
         .set('system:time_start', image.get('system:time_start'))
 
-    return ee.Image(out)
+    return out
