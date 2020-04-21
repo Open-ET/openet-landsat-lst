@@ -758,9 +758,9 @@ def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],
         logging.debug('  Simplifying study area geometry (tol={})'.format(tol))
         output_geom = output_geom.SimplifyPreserveTopology(tol)
         # output_geom = output_geom.SimplifyPreserveTopology(tol).buffer(tol)
-    else:
-        # Added flatten call to change clockwise geometries to counter cw
-        output_geom.FlattenTo2D()
+    # else:
+    # Added flatten call to change clockwise geometries to counter cw
+    output_geom.FlattenTo2D()
 
     logging.debug('  Building GeoJSON')
     output_geojson = json.loads(output_geom.ExportToJson())

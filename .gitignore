@@ -21,3 +21,5 @@ dist/
 
 # PyCharm project settings
 .idea
+
+*.json
