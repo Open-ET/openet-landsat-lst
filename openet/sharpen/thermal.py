@@ -1,6 +1,6 @@
 import ee
 
-from . import utils
+import openet.core.utils as utils
 
 
 # TODO: Move the "calculation" steps to a separate function
@@ -40,7 +40,7 @@ def landsat(image):
 
     bound = image.geometry()
     crs = image.projection().crs()
-    transform = utils.getAffineTransform(image)
+    transform = getAffineTransform(image)
 
     tir_transform = transform.set(0, tir_res).set(4, tir_res.multiply(-1))
 
@@ -165,3 +165,9 @@ def landsat(image):
         .set('system:time_start', image.get('system:time_start'))
 
     return out
+
+
+def getAffineTransform(image):
+    projection = image.projection()
+    json = ee.Dictionary(ee.Algorithms.Describe(projection))
+    return ee.List(json.get('transform'))

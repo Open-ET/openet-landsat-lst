@@ -13,10 +13,11 @@ import ee
 from google.cloud import datastore
 from osgeo import ogr
 
-import utils
+
 import openet.sharpen
 import openet.sharpen.thermal
 import openet.core
+import openet.core.utils as utils
 # CGM - Using SIMS for building image ID list (for now)
 import openet.sims as model
 # import openet.disalexi as model
@@ -302,22 +303,18 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         input('ENTER')
 
 
-    # Build scene collections and folders as necessary
-    logging.debug('\nChecking scene collections')
-    for collection in collections:
-        logging.debug('  Input Collection:  {}'.format(collection))
-        logging.debug('  Export Collection: {}'.format(scene_coll_id))
-        if not ee.data.getInfo(scene_coll_id.rsplit('/', 1)[0]):
-            logging.debug('\nFolder does not exist and will be built'
-                          '\n  {}'.format(scene_coll_id.rsplit('/', 1)[0]))
-            input('Press ENTER to continue')
-            ee.data.createAsset({'type': 'FOLDER'},
-                                scene_coll_id.rsplit('/', 1)[0])
-        if not ee.data.getInfo(scene_coll_id):
-            logging.info('\nExport collection does not exist and will be built'
-                         '\n  {}'.format(scene_coll_id))
-            input('Press ENTER to continue')
-            ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, scene_coll_id)
+    # Build output collection and folder if necessary
+    logging.debug('\nExport Collection: {}'.format(scene_coll_id))
+    if not ee.data.getInfo(scene_coll_id.rsplit('/', 1)[0]):
+        logging.debug('\nFolder does not exist and will be built'
+                      '\n  {}'.format(scene_coll_id.rsplit('/', 1)[0]))
+        input('Press ENTER to continue')
+        ee.data.createAsset({'type': 'FOLDER'}, scene_coll_id.rsplit('/', 1)[0])
+    if not ee.data.getInfo(scene_coll_id):
+        logging.info('\nExport collection does not exist and will be built'
+                     '\n  {}'.format(scene_coll_id))
+        input('Press ENTER to continue')
+        ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, scene_coll_id)
 
 
     # Get list of MGRS tiles that intersect the study area

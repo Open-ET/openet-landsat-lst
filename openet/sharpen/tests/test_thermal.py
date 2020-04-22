@@ -5,6 +5,7 @@ import ee
 # import pytest
 
 import openet.sharpen.thermal
+import openet.core.utils as utils
 
 logging.basicConfig(level=logging.DEBUG, format='%(message)s')
 
@@ -38,7 +39,7 @@ def test_sharpen_thermal_landsat_sr(tol=0.01):
         .set({'SATELLITE': spacecraft_id})
     output_img = openet.sharpen.thermal.landsat(prep_image) \
         .select(['tir_sharpened'])
-    output = openet.sharpen.utils.point_image_value(
+    output = utils.point_image_value(
         output_img, TEST_POINT, scale=30)['tir_sharpened']
     assert abs(output - expected) < tol
 
@@ -60,7 +61,7 @@ def test_sharpen_thermal_landsat_sr_no_scaling(tol=0.01):
         .set({'SATELLITE': spacecraft_id})
     output_img = openet.sharpen.thermal.landsat(prep_image) \
         .select(['tir_sharpened'])
-    output = openet.sharpen.utils.point_image_value(
+    output = utils.point_image_value(
         output_img, TEST_POINT, scale=30)['tir_sharpened']
     assert abs(output - expected) < tol
 
@@ -81,6 +82,6 @@ def test_sharpen_thermal_landsat_toa(tol=0.01):
         .set({'SATELLITE': spacecraft_id})
     output_img = openet.sharpen.thermal.landsat(prep_image) \
         .select(['tir_sharpened'])
-    output = openet.sharpen.utils.point_image_value(
+    output = utils.point_image_value(
         output_img, TEST_POINT, scale=30)['tir_sharpened']
     assert abs(output - expected) < tol
