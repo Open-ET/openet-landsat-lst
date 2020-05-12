@@ -144,28 +144,28 @@ def landsat(image):
     tir_sp_final = tir_sp_final.add(tir_sp_global.multiply(res_global.eq(0)))
 
     """ YK - UPDATE: Apply Energy Conservation to combined sharpened image """
-    # aggregated sharpened image
+    # Aggregated sharpened image
     tir_sp_agg = tir_sp_final.pow(4) \
         .reduceResolution(ee.Reducer.mean()) \
-        .reproject(crs,tir_transform).pow(0.25)
+        .reproject(crs=crs, crsTransform=tir_transform).pow(0.25)
 
-    # interpolate residuals
+    # Interpolate residuals
     res_sp = tir_sp_agg.subtract(tir.pow(0.25))
     res_conv = res_sp.resample('bilinear').reproject(crs,transform)
 
-    # add interpolated residual back to sharpened image
+    # Add interpolated residual back to sharpened image
     tir_sp_ec = tir_sp_final.subtract(res_conv)
 
     # Prepare output
-    out = tir_sp_ec.rename(['tir_sharpened_ec'])
+    out = tir_sp_ec.rename(['tir_sharpened'])
 
-    # TODO: Add flag/parameter to control if all bands are exported
-    out = out.addBands(tir_sp_final.rename(['tir_sharpened'])) \
-        .addBands(image.select('tir').rename(['tir_original'])) \
-        .addBands(tir_sp_local.rename(['tir_sp_local'])) \
-        .addBands(tir_sp_global.rename(['tir_sp_global'])) \
-        .addBands(weight_local.rename(['local_weights'])) \
-        .addBands(rmse.rename(['slr_rmse']))
+    # # TODO: Add flag/parameter to control if all bands are exported
+    # out = out.addBands(tir_sp_final.rename(['tir_sharpened_non_ec'])) \
+    #     .addBands(image.select('tir').rename(['tir_original'])) \
+    #     .addBands(tir_sp_local.rename(['tir_sp_local'])) \
+    #     .addBands(tir_sp_global.rename(['tir_sp_global'])) \
+    #     .addBands(weight_local.rename(['local_weights'])) \
+    #     .addBands(rmse.rename(['slr_rmse']))
 
     # YK - update: do not save aggregated images as they will be resampled when exporting
         # .addBands(tir.pow(0.25).rename(['tir_agg'])) \
