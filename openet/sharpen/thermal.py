@@ -1,7 +1,5 @@
 import ee
 
-import openet.core.utils as utils
-
 
 # TODO: Move the "calculation" steps to a separate function
 #   Conceptually structure this like there were separate SR and TOA functions
@@ -46,7 +44,6 @@ def landsat(image):
 
     # Aggregate the TIR band (result of the cubic convolution interpolation)
     # Convert to brightness temperature or radiance
-    # YK - Update: use crs and transform in all reproject calls
     tir = image.select(['tir']) \
         .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
         .reproject(crs=crs, crsTransform=tir_transform) \
@@ -185,18 +182,9 @@ def landsat(image):
     #     .addBands(weight_local.rename(['local_weights'])) \
     #     .addBands(rmse.rename(['slr_rmse']))
 
-
-    # Need to reproject to original crs with transform to avoid misalignment
-    # YK - This is not necessary
-    # out = out.reproject(crs=crs, crsTransform=transform)
-
-    # CM - Testing out commenting out the final clip call
-    # out = out.clip(bound)
-
-    # YK - update: add a properties for EC
     out = out.copyProperties(image) \
-        .set('system:time_start', image.get('system:time_start')) \
-        .set('energy_conservation', 'True')
+        .set({'system:time_start': image.get('system:time_start')
+              'energy_conservation': 'True'})
 
     return out
 
