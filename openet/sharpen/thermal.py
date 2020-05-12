@@ -183,7 +183,7 @@ def landsat(image):
     #     .addBands(rmse.rename(['slr_rmse']))
 
     out = out.copyProperties(image) \
-        .set({'system:time_start': image.get('system:time_start')
+        .set({'system:time_start': image.get('system:time_start'),
               'energy_conservation': 'True'})
 
     return out
