@@ -1,6 +1,6 @@
 import ee
 
-from . import utils
+import openet.core.utils as utils
 
 
 # TODO: Move the "calculation" steps to a separate function
@@ -40,7 +40,7 @@ def landsat(image):
 
     bound = image.geometry()
     crs = image.projection().crs()
-    transform = utils.getAffineTransform(image)
+    transform = getAffineTransform(image)
 
     tir_transform = transform.set(0, tir_res).set(4, tir_res.multiply(-1))
 
@@ -71,7 +71,6 @@ def landsat(image):
     image_agg = other_mean \
         .addBands(other_mean.select([0]).multiply(0).add(1).rename(['bias'])) \
         .addBands(tir) \
-    #     .clip(bound)
 
     # Fit moving-window linear regressions at coarse resolution
     # Y: tir (power 4)
@@ -164,16 +163,28 @@ def landsat(image):
     out = tir_sp_ec.rename(['tir_sharpened_ec'])
 
     # TODO: Add flag/parameter to control if all bands are exported
-    # YK - update: do not save aggregated images as they will be resampled when exporting
     out = out.addBands(tir_sp_final.rename(['tir_sharpened'])) \
         .addBands(image.select('tir').rename(['tir_original'])) \
         .addBands(tir_sp_local.rename(['tir_sp_local'])) \
         .addBands(tir_sp_global.rename(['tir_sp_global'])) \
         .addBands(weight_local.rename(['local_weights'])) \
         .addBands(rmse.rename(['slr_rmse']))
+
+    # YK - update: do not save aggregated images as they will be resampled when exporting
         # .addBands(tir.pow(0.25).rename(['tir_agg'])) \
         # .addBands(local_agg.rename(['tir_local_agg'])) \
-        # .addBands(global_agg.rename(['tir_global_agg'])) \
+        # .addBands(global_agg.rename(['tir_global_agg']))
+
+    # CM - Commenting out adding the other bands for now
+    # out = out.addBands(image.select('tir').rename(['tir_original'])) \
+    #     .addBands(tir.pow(0.25).rename(['tir_agg'])) \
+    #     .addBands(tir_sp_local.rename(['tir_sp_local'])) \
+    #     .addBands(tir_sp_global.rename(['tir_sp_global'])) \
+    #     .addBands(local_agg.rename(['tir_local_agg'])) \
+    #     .addBands(global_agg.rename(['tir_global_agg'])) \
+    #     .addBands(weight_local.rename(['local_weights'])) \
+    #     .addBands(rmse.rename(['slr_rmse']))
+
 
     # Need to reproject to original crs with transform to avoid misalignment
     # YK - This is not necessary
@@ -185,6 +196,12 @@ def landsat(image):
     # YK - update: add a properties for EC
     out = out.copyProperties(image) \
         .set('system:time_start', image.get('system:time_start')) \
-        .set('energy_conservation','Ture')
+        .set('energy_conservation', 'True')
 
-    return ee.Image(out)
+    return out
+
+
+def getAffineTransform(image):
+    projection = image.projection()
+    json = ee.Dictionary(ee.Algorithms.Describe(projection))
+    return ee.List(json.get('transform'))
