@@ -1,7 +1,5 @@
 import ee
 
-import openet.core.utils as utils
-
 
 # TODO: Move the "calculation" steps to a separate function
 #   Conceptually structure this like there were separate SR and TOA functions
@@ -48,19 +46,19 @@ def landsat(image):
     # Convert to brightness temperature or radiance
     tir = image.select(['tir']) \
         .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
-        .reproject(crs=crs, scale=tir_res) \
+        .reproject(crs=crs, crsTransform=tir_transform) \
         .pow(4)
 
     # Aggregating predictor bands for mean value
     other = image.select(bands)
     other_mean = other \
         .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
-        .reproject(crs=crs, scale=tir_res)
+        .reproject(crs=crs, crsTransform=tir_transform)
 
     # Aggregating predictor bands for std value
     other_std = other \
         .reduceResolution(reducer=ee.Reducer.stdDev(), bestEffort=True) \
-        .reproject(crs=crs, scale=tir_res)
+        .reproject(crs=crs, crsTransform=tir_transform)
 
     # Compute the coefficient of variation of sub-pixel reflectance
     other_cv = other_std.divide(other_mean).reduce(ee.Reducer.mean()) \
@@ -100,7 +98,8 @@ def landsat(image):
         .updateMask(other_cv.lt(cv_threshold)) \
         .sample(region=bound, scale=tir_res, factor=5e-3)
 
-    rf = ee.Classifier.randomForest(100, 4, 50) \
+    # YK - Update: use smileRandomForest
+    rf = ee.Classifier.smileRandomForest(100, 4, 50) \
         .setOutputMode('REGRESSION') \
         .train(samples, 'tir', bands)
 
@@ -111,20 +110,23 @@ def landsat(image):
     # Aggregate local model results to tir resolution
     local_agg = tir_sp_local.pow(4) \
         .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
-        .reproject(crs=crs, scale=tir_res) \
+        .reproject(crs=crs, crsTransform=tir_transform) \
         .pow(0.25)
 
     # Aggregate global model results to tir resolution
     global_agg = tir_sp_global.pow(4) \
         .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True) \
-        .reproject(crs=crs, scale=tir_res) \
+        .reproject(crs=crs, crsTransform=tir_transform) \
         .pow(0.25)
 
     # Compute weights based on residuals at coarse resolution
+    # YK - Update: use existing images instead of ee.Image(1)
     res_local = local_agg.pow(4).subtract(tir).abs()
     res_global = global_agg.pow(4).subtract(tir).abs()
-    res_local_part = ee.Image(1).divide(res_local.pow(2))
-    res_global_part = ee.Image(1).divide(res_global.pow(2))
+    ## res_local_part = ee.Image(1).divide(res_local.pow(2))
+    # res_global_part = ee.Image(1).divide(res_global.pow(2))
+    res_local_part = res_local.multiply(0).add(1).divide(res_local.pow(2))
+    res_global_part = res_global.multiply(0).add(1).divide(res_global.pow(2))
     weight_local = res_local_part.divide(res_local_part.add(res_global_part))
     weight_global = res_global_part.divide(res_local_part.add(res_global_part))
 
@@ -141,10 +143,35 @@ def landsat(image):
     # Global residual is 0
     tir_sp_final = tir_sp_final.add(tir_sp_global.multiply(res_global.eq(0)))
 
-    # Prepare output
-    out = tir_sp_final.rename(['tir_sharpened'])
+    """ YK - UPDATE: Apply Energy Conservation to combined sharpened image """
+    # Aggregated sharpened image
+    tir_sp_agg = tir_sp_final.pow(4) \
+        .reduceResolution(ee.Reducer.mean()) \
+        .reproject(crs=crs, crsTransform=tir_transform).pow(0.25)
 
-    # TODO: Add flag/parameter to control if all bands are exported
+    # Interpolate residuals
+    res_sp = tir_sp_agg.subtract(tir.pow(0.25))
+    res_conv = res_sp.resample('bilinear').reproject(crs,transform)
+
+    # Add interpolated residual back to sharpened image
+    tir_sp_ec = tir_sp_final.subtract(res_conv)
+
+    # Prepare output
+    out = tir_sp_ec.rename(['tir_sharpened'])
+
+    # # TODO: Add flag/parameter to control if all bands are exported
+    # out = out.addBands(tir_sp_final.rename(['tir_sharpened_non_ec'])) \
+    #     .addBands(image.select('tir').rename(['tir_original'])) \
+    #     .addBands(tir_sp_local.rename(['tir_sp_local'])) \
+    #     .addBands(tir_sp_global.rename(['tir_sp_global'])) \
+    #     .addBands(weight_local.rename(['local_weights'])) \
+    #     .addBands(rmse.rename(['slr_rmse']))
+
+    # YK - update: do not save aggregated images as they will be resampled when exporting
+        # .addBands(tir.pow(0.25).rename(['tir_agg'])) \
+        # .addBands(local_agg.rename(['tir_local_agg'])) \
+        # .addBands(global_agg.rename(['tir_global_agg']))
+
     # CM - Commenting out adding the other bands for now
     # out = out.addBands(image.select('tir').rename(['tir_original'])) \
     #     .addBands(tir.pow(0.25).rename(['tir_agg'])) \
@@ -155,14 +182,9 @@ def landsat(image):
     #     .addBands(weight_local.rename(['local_weights'])) \
     #     .addBands(rmse.rename(['slr_rmse']))
 
-    # Need to reproject to original crs with transform to avoid misalignment
-    out = out.reproject(crs=crs, crsTransform=transform)
-
-    # CM - Testing out commenting out the final clip call
-    # out = out.clip(bound)
-
     out = ee.Image(out.copyProperties(image)) \
-        .set('system:time_start', image.get('system:time_start'))
+        .set({'system:time_start': image.get('system:time_start'),
+              'energy_conservation': 'True'})
 
     return out
 

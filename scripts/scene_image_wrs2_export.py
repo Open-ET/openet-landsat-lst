@@ -458,7 +458,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         continue
                     # In update mode only overwrite if the version is old
                     if asset_props and asset_id in asset_props.keys():
-                        model_ver = version_number(model.__version__)
+                        model_ver = version_number(openet.sharpen.__version__)
                         asset_ver = version_number(
                             asset_props[asset_id]['model_version'])
                         # asset_flt = [
@@ -593,7 +593,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     'date_ingested': datetime.datetime.today().strftime('%Y-%m-%d'),
                     'image_id': image_id,
                     'model_name': model_name,
-                    'model_version': model.__version__,
+                    'model_version': openet.sharpen.__version__,
                     'scale_factor': 1.0 / scale_factor,
                     'scene_id': scene_id,
                     'sharpen_version': openet.sharpen.__version__,
