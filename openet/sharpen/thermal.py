@@ -182,7 +182,7 @@ def landsat(image):
     #     .addBands(weight_local.rename(['local_weights'])) \
     #     .addBands(rmse.rename(['slr_rmse']))
 
-    out = out.copyProperties(image) \
+    out = ee.Image(out.copyProperties(image)) \
         .set({'system:time_start': image.get('system:time_start'),
               'energy_conservation': 'True'})
 
