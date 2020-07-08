@@ -158,7 +158,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         study_area_features = sorted([
             x.strip() for x in study_area_features.split(',')])
     except KeyError:
-        raise ValueError('"study_area_features" parameter was not set in INI')
+        study_area_features = []
+        logging.debug('  study_area_features: not set in INI, defaulting to []')
     except Exception as e:
         raise e
 
@@ -733,13 +734,13 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         'study_area_features' parameters are both set.
     study_area_features : list, optional
         List of study area feature property values to filter on.
-    mgrs_tiles : list
+    mgrs_tiles : list, optional
         User defined MGRS tile subset.
-    mgrs_skip_list : list
+    mgrs_skip_list : list, optional
         User defined list MGRS tiles to skip.
-    utm_zones : list
+    utm_zones : list, optional
         User defined UTM zone subset.
-    wrs2_tiles : list
+    wrs2_tiles : list, optional
         User defined WRS2 tile subset.
     mgrs_property : str, optional
         MGRS property in the MGRS feature collection (the default is 'mgrs').
