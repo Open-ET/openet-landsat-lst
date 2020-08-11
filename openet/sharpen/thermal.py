@@ -29,7 +29,11 @@ def landsat(image):
     tir_res_dict = ee.Dictionary({
         'LANDSAT_4': 120, 'LANDSAT_5': 120, 'LANDSAT_7': 60, 'LANDSAT_8': 100})
     tir_res = ee.Number(tir_res_dict.get(image.get('SATELLITE')))
-    # high_res = 30
+
+    # Apply energy conservation step with a slighter large window to reduce blurry effect
+    ec_window_dict = ee.Dictionary({
+        'LANDSAT_4': 120, 'LANDSAT_5': 120, 'LANDSAT_7': 90, 'LANDSAT_8': 120})
+    ec_window = ee.Number(ec_window_dict.get(image.get('SATELLITE')))
 
     kernel_size = 20  # kernel radius for local linear regression,
     # lower values for more heterogeneous areas
@@ -41,6 +45,7 @@ def landsat(image):
     transform = getAffineTransform(image)
 
     tir_transform = transform.set(0, tir_res).set(4, tir_res.multiply(-1))
+    ec_transform = transform.set(0, ec_window).set(4, ec_window.multiply(-1))
 
     # Aggregate the TIR band (result of the cubic convolution interpolation)
     # Convert to brightness temperature or radiance
@@ -147,10 +152,14 @@ def landsat(image):
     # Aggregated sharpened image
     tir_sp_agg = tir_sp_final.pow(4) \
         .reduceResolution(ee.Reducer.mean()) \
-        .reproject(crs=crs, crsTransform=tir_transform).pow(0.25)
+        .reproject(crs=crs, crsTransform=ec_transform).pow(0.25)
+    # Aggregate original TIR image
+    tir_org_agg = tir \
+        .reduceResolution(ee.Reducer.mean()) \
+        .reproject(crs=crs, crsTransform=ec_transform).pow(0.25)
 
     # Interpolate residuals
-    res_sp = tir_sp_agg.subtract(tir.pow(0.25))
+    res_sp = tir_sp_agg.subtract(tir_org_agg)
     res_conv = res_sp.resample('bilinear').reproject(crs,transform)
 
     # Add interpolated residual back to sharpened image
@@ -160,17 +169,12 @@ def landsat(image):
     out = tir_sp_ec.rename(['tir_sharpened'])
 
     # # TODO: Add flag/parameter to control if all bands are exported
-    # out = out.addBands(tir_sp_final.rename(['tir_sharpened_non_ec'])) \
-    #     .addBands(image.select('tir').rename(['tir_original'])) \
-    #     .addBands(tir_sp_local.rename(['tir_sp_local'])) \
-    #     .addBands(tir_sp_global.rename(['tir_sp_global'])) \
-    #     .addBands(weight_local.rename(['local_weights'])) \
-    #     .addBands(rmse.rename(['slr_rmse']))
-
-    # YK - update: do not save aggregated images as they will be resampled when exporting
-        # .addBands(tir.pow(0.25).rename(['tir_agg'])) \
-        # .addBands(local_agg.rename(['tir_local_agg'])) \
-        # .addBands(global_agg.rename(['tir_global_agg']))
+    out = out.addBands(tir_sp_final.rename(['tir_sharpened_non_ec'])) \
+        .addBands(image.select('tir').rename(['tir_original'])) \
+        .addBands(tir_sp_local.rename(['tir_sp_local'])) \
+        .addBands(tir_sp_global.rename(['tir_sp_global'])) \
+        .addBands(weight_local.rename(['local_weights'])) \
+        .addBands(rmse.rename(['slr_rmse']))
 
     # CM - Commenting out adding the other bands for now
     # out = out.addBands(image.select('tir').rename(['tir_original'])) \
