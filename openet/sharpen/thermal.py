@@ -154,7 +154,7 @@ def landsat(image):
         .reduceResolution(ee.Reducer.mean()) \
         .reproject(crs=crs, crsTransform=ec_transform).pow(0.25)
     # Aggregate original TIR image
-    tir_org_agg = tir \
+    tir_org_agg = image.select(['tir']).pow(4) \
         .reduceResolution(ee.Reducer.mean()) \
         .reproject(crs=crs, crsTransform=ec_transform).pow(0.25)
 
