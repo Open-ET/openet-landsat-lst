@@ -76,10 +76,12 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     # List of path/rows to skip
     wrs2_skip_list = [
-        'p038r038', 'p039r038', 'p040r038',  # Mexico
+        'p038r038', 'p039r038', 'p040r038',  # Mexico (by CA)
         'p042r037',  # San Nicholas Island
         'p049r026',  # Vancouver Island
         # 'p041r037', 'p042r037', 'p047r031',  # CA Coast
+        'p033r039', 'p032r040', # Mexico (by TX)
+        'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (by TX)
     ]
 
     mgrs_skip_list = []
