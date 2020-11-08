@@ -82,7 +82,15 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         # 'p041r037', 'p042r037', 'p047r031',  # CA Coast
         'p033r039', 'p032r040', # Mexico (by TX)
         'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (by TX)
+        # 'p019r040', # Florida west
+        # 'p016r043', 'p015r043', # Florida south
+        # 'p014r041', 'p014r042', 'p014r043', # Florida east
+        # 'p013r035', 'p013r036', # NC Outer Banks
+        # 'p011r032', # RI
+        # 'p013r026', 'p012r026', # Canada (by ME)
     ]
+    wrs2_path_skip_list = [9, 49]
+    wrs2_row_skip_list = [25, 24, 43]
 
     mgrs_skip_list = []
 
@@ -289,10 +297,9 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     if gee_key_file:
         logging.info('  Using service account key file: {}'.format(gee_key_file))
         # The "EE_ACCOUNT"  doesn't seem to be used if the key file is valid
-        ee.Initialize(ee.ServiceAccountCredentials('test', key_file=gee_key_file),
-                      use_cloud_api=True)
+        ee.Initialize(ee.ServiceAccountCredentials('test', key_file=gee_key_file))
     else:
-        ee.Initialize(use_cloud_api=True)
+        ee.Initialize()
     utils.get_info(ee.Number(1))
 
 
@@ -371,6 +378,14 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 continue
             elif wrs2_skip_list and wrs2_tile in wrs2_skip_list:
                 logging.info('{} {} ({}/{}) - in wrs2 skip list'.format(
+                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
+                continue
+            elif wrs2_row_skip_list and row in wrs2_row_skip_list:
+                logging.info('{} {} ({}/{}) - in wrs2 row skip list'.format(
+                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
+                continue
+            elif wrs2_path_skip_list and path in wrs2_path_skip_list:
+                logging.info('{} {} ({}/{}) - in wrs2 path skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
             else:
@@ -613,7 +628,13 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     'model_version': openet.sharpen.__version__,
                     'scale_factor': 1.0 / scale_factor,
                     'scene_id': scene_id,
+                    # CGM - Is this separate property still needed?
+                    # Having it named separately from model_version might make
+                    #   it easier to pass through to other models/calculations
                     'sharpen_version': openet.sharpen.__version__,
+                    # CGM - Tracking the SIMS version since it was used to build
+                    #   the image collection
+                    'sims_version': model.__version__,
                     'tool_name': TOOL_NAME,
                     'tool_version': TOOL_VERSION,
                     'wrs2_path': p,
@@ -774,7 +795,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         study_area_coll = study_area_coll.filter(
             ee.Filter.inList(study_area_property, study_area_features))
 
-    logging.info('Building MGRS tile list')
+    logging.debug('Building MGRS tile list')
     tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
         .filterBounds(study_area_coll.geometry())
 
