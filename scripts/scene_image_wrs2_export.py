@@ -343,7 +343,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, scene_coll_id)
 
 
-    # Get list of MGRS tiles that intersect the study area
+# Get list of MGRS tiles that intersect the study area
     logging.debug('\nMGRS Tiles/Zones')
     export_list = mgrs_export_tiles(
         study_area_coll_id=study_area_coll_id,
@@ -845,9 +845,6 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
     export_list = [
         tile for tile in sorted(tiles_list, key=lambda k: k['index'])
         if tile['wrs2_tiles']]
-
-    # pprint.pprint(export_list)
-    # input('ENTER')
 
     return export_list
 
