@@ -11,8 +11,6 @@ import time
 
 import ee
 from google.cloud import datastore
-from osgeo import ogr
-
 
 import openet.sharpen
 import openet.sharpen.thermal
@@ -23,7 +21,7 @@ import openet.sims as model
 # import openet.disalexi as model
 
 TOOL_NAME = 'tir_image_wrs2_export'
-TOOL_VERSION = '0.1.5'
+TOOL_VERSION = '0.1.6'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
@@ -111,6 +109,13 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     logging.info('  ET Model: {}'.format(model_name))
 
     try:
+        study_area_coll_id = str(ini['INPUTS']['study_area_coll'])
+    except KeyError:
+        raise ValueError('"study_area_coll" parameter was not set in INI')
+    except Exception as e:
+        raise e
+
+    try:
         start_date = str(ini['INPUTS']['start_date'])
     except KeyError:
         raise ValueError('"start_date" parameter was not set in INI')
@@ -141,6 +146,24 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     # Optional parameters
     try:
+        study_area_property = str(ini['INPUTS']['study_area_property'])
+    except KeyError:
+        study_area_property = None
+        logging.debug('  study_area_property: not set in INI, defaulting to None')
+    except Exception as e:
+        raise e
+
+    try:
+        study_area_features = str(ini['INPUTS']['study_area_features'])
+        study_area_features = sorted([
+            x.strip() for x in study_area_features.split(',')])
+    except KeyError:
+        study_area_features = []
+        logging.debug('  study_area_features: not set in INI, defaulting to []')
+    except Exception as e:
+        raise e
+
+    try:
         scene_coll_id = str(ini['EXPORT']['scene_coll'])
     except KeyError:
         scene_coll_id = 'projects/earthengine-legacy/assets/' \
@@ -158,15 +181,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     except KeyError:
         wrs2_tiles = []
         logging.debug('  wrs2_tiles: not set in INI, defaulting to []')
-    except Exception as e:
-        raise e
-
-    try:
-        simplify_buffer = float(ini['INPUTS']['simplify_buffer'])
-    except KeyError:
-        simplify_buffer = 0
-        logging.debug('  simplify_buffer: not set in INI, '
-                      'defaulting to {}'.format(simplify_buffer))
     except Exception as e:
         raise e
 
@@ -283,7 +297,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # TODO: set datastore key file as a parameter?
     datastore_key_file = 'openet-dri-datastore.json'
     if log_tasks and not os.path.isfile(datastore_key_file):
-        logging.info('Task logging disabled, datastore key does not exist')
+        logging.info('\nTask logging disabled, datastore key does not exist')
         log_tasks = False
         # input('ENTER')
     if log_tasks:
@@ -317,16 +331,17 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, scene_coll_id)
 
 
-    # Get list of MGRS tiles that intersect the study area
+# Get list of MGRS tiles that intersect the study area
     logging.debug('\nMGRS Tiles/Zones')
     export_list = mgrs_export_tiles(
-        ini['INPUTS']['study_area_path'],
+        study_area_coll_id=study_area_coll_id,
         mgrs_coll_id=mgrs_ftr_coll_id,
+        study_area_property=study_area_property,
+        study_area_features=study_area_features,
         mgrs_tiles=mgrs_tiles,
         mgrs_skip_list=mgrs_skip_list,
         utm_zones=utm_zones,
         wrs2_tiles=wrs2_tiles,
-        simplify_buffer=simplify_buffer,
     )
     if not export_list:
         logging.error('\nEmpty export list, exiting')
@@ -599,6 +614,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     'sharpen_version': openet.sharpen.__version__,
                     'tool_name': TOOL_NAME,
                     'tool_version': TOOL_VERSION,
+                    'wrs2_path': p,
+                    'wrs2_row': r,
                     'wrs2_tile': wrs2_tile_fmt.format(p, r),
                     # Source properties
                     'CLOUD_COVER': output_info['properties']['CLOUD_COVER'],
@@ -689,25 +706,33 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 logging.debug('')
 
 
-def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],
-                      mgrs_skip_list=[], utm_zones=[], wrs2_tiles=[],
+def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
+                      study_area_property=None, study_area_features=[],
+                      mgrs_tiles=[], mgrs_skip_list=[],
+                      utm_zones=[], wrs2_tiles=[],
                       mgrs_property='mgrs', utm_property='utm',
-                      wrs2_property='wrs2', simplify_buffer=0):
+                      wrs2_property='wrs2'):
     """Select MGRS tiles and metadata that intersect the study area geometry
 
     Parameters
     ----------
-    study_area_path : str
-        File path of the study area shapefile.
+    study_area_coll_id : str
+        Study area feature collection asset ID.
     mgrs_coll_id : str
         MGRS feature collection asset ID.
-    mgrs_tiles : list
+    study_area_property : str, optional
+        Property name to use for inList() filter call of study area collection.
+        Filter will only be applied if both 'study_area_property' and
+        'study_area_features' parameters are both set.
+    study_area_features : list, optional
+        List of study area feature property values to filter on.
+    mgrs_tiles : list, optional
         User defined MGRS tile subset.
-    mgrs_skip_list : list
+    mgrs_skip_list : list, optional
         User defined list MGRS tiles to skip.
-    utm_zones : list
+    utm_zones : list, optional
         User defined UTM zone subset.
-    wrs2_tiles : list
+    wrs2_tiles : list, optional
         User defined WRS2 tile subset.
     mgrs_property : str, optional
         MGRS property in the MGRS feature collection (the default is 'mgrs').
@@ -715,59 +740,41 @@ def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],
         UTM zone property in the MGRS feature collection (the default is 'wrs2').
     wrs2_property : str, optional
         WRS2 property in the MGRS feature collection (the default is 'wrs2').
-    simplify_buffer : float, optional
-        Study area simplify tolerance (the default is 0).
-        Note, this distance is in the units of the study area shapefile.
 
     Returns
     ------
     list of dicts: export information
 
     """
-    logging.info('\nReading study area shapefile')
-    logging.info('  {}'.format(study_area_path))
-    study_area_ds = ogr.Open(study_area_path, 0)
-    study_area_lyr = study_area_ds.GetLayer()
-    study_area_osr = study_area_lyr.GetSpatialRef()
-    study_area_crs = str(study_area_osr.ExportToWkt())
-    # study_area_proj4 = study_area_osr.ExportToProj4()
-    logging.debug('  Study area projection: {}'.format(study_area_crs))
+    # Build and filter the study area feature collection
+    logging.debug('Building study area collection')
+    logging.debug('  {}'.format(study_area_coll_id))
+    study_area_coll = ee.FeatureCollection(study_area_coll_id)
+    if (study_area_property == 'STUSPS' and
+            'CONUS' in [x.upper() for x in study_area_features]):
+        # Exclude AK, HI, AS, GU, PR, MP, VI, (but keep DC)
+        study_area_features = [
+            'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA',
+            'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME',
+            'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ',
+            'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD',
+            'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY']
+    # elif (study_area_property == 'STUSPS' and
+    #         'WESTERN11' in [x.upper() for x in study_area_features]):
+    #     study_area_features = [
+    #         'AZ', 'CA', 'CO', 'ID', 'MT', 'NM', 'NV', 'OR', 'UT', 'WA', 'WY']
+    study_area_features = sorted(list(set(study_area_features)))
 
-    # Get the dissolved/unioned geometry of the study area
-    output_geom = ogr.Geometry(ogr.wkbMultiPolygon)
-    for study_area_ftr in study_area_lyr:
-        output_geom = output_geom.Union(study_area_ftr.GetGeometryRef())
-    study_area_ds = None
-
-    # # Project the study area geometry to the EPSG:3857
-    # #   so units will be meters for buffering and simplifying
-    # temp_crs = 'EPSG:3857'
-    # temp_osr = osr.SpatialReference()
-    # temp_osr.ImportFromEPSG(3857)
-    # output_tx = osr.CoordinateTransformation(study_area_osr, temp_osr)
-    # output_geom.Transform(output_tx)
-
-    if simplify_buffer:
-        output_geom = output_geom.SimplifyPreserveTopology(simplify_buffer) \
-            .buffer(simplify_buffer)
-    elif study_area_osr.IsGeographic():
-        tol = 0.0000001
-        logging.debug('  Simplifying study area geometry (tol={})'.format(tol))
-        output_geom = output_geom.SimplifyPreserveTopology(tol)
-        # output_geom = output_geom.SimplifyPreserveTopology(tol).buffer(tol)
-    # else:
-    # Added flatten call to change clockwise geometries to counter cw
-    output_geom.FlattenTo2D()
-
-    logging.debug('  Building GeoJSON')
-    output_geojson = json.loads(output_geom.ExportToJson())
-
-    logging.debug('  Building EE geometry')
-    output_ee_geom = ee.Geometry(output_geojson, study_area_crs, False)
+    if study_area_property and study_area_features:
+        logging.debug('  Filtering study area collection')
+        logging.debug('  Property: {}'.format(study_area_property))
+        logging.debug('  Features: {}'.format(','.join(study_area_features)))
+        study_area_coll = study_area_coll.filter(
+            ee.Filter.inList(study_area_property, study_area_features))
 
     logging.info('Building MGRS tile list')
     tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
-        .filterBounds(output_ee_geom)
+        .filterBounds(study_area_coll.geometry())
 
     # Filter collection by user defined lists
     if utm_zones:
@@ -812,9 +819,6 @@ def mgrs_export_tiles(study_area_path, mgrs_coll_id, mgrs_tiles=[],
     export_list = [
         tile for tile in sorted(tiles_list, key=lambda k: k['index'])
         if tile['wrs2_tiles']]
-
-    # pprint.pprint(export_list)
-    # input('ENTER')
 
     return export_list
 
