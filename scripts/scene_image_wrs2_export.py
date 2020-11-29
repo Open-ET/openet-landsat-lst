@@ -76,11 +76,24 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     # List of path/rows to skip
     wrs2_skip_list = [
-        'p038r038', 'p039r038', 'p040r038',  # Mexico
-        'p042r037',  # San Nicholas Island
-        'p049r026',  # Vancouver Island
-        # 'p041r037', 'p042r037', 'p047r031',  # CA Coast
+        'p049r026',  # Vancouver Island, Canada
+        # 'p047r031', # North California coast
+        'p042r037',  # San Nicholas Island, California
+        # 'p041r037', # South California coast
+        'p040r038', 'p039r038', 'p038r038', # Mexico (by California)
+        'p037r039', 'p036r039', 'p035r039', # Mexico (by Arizona)
+        'p034r039', 'p033r039', # Mexico (by New Mexico)
+        'p032r040',  # Mexico (West Texas)
+        'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (South Texas)
+        'p019r040', # West Florida coast
+        'p016r043', 'p015r043', # South Florida coast
+        'p014r041', 'p014r042', 'p014r043', # East Florida coast
+        'p013r035', 'p013r036', # North Carolina Outer Banks
+        'p013r026', 'p012r026', # Canada (by Maine)
+        'p011r032', # Rhode Island coast
     ]
+    wrs2_path_skip_list = [9, 49]
+    wrs2_row_skip_list = [25, 24, 43]
 
     mgrs_skip_list = []
 
@@ -287,10 +300,9 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     if gee_key_file:
         logging.info('  Using service account key file: {}'.format(gee_key_file))
         # The "EE_ACCOUNT"  doesn't seem to be used if the key file is valid
-        ee.Initialize(ee.ServiceAccountCredentials('test', key_file=gee_key_file),
-                      use_cloud_api=True)
+        ee.Initialize(ee.ServiceAccountCredentials('test', key_file=gee_key_file))
     else:
-        ee.Initialize(use_cloud_api=True)
+        ee.Initialize()
     utils.get_info(ee.Number(1))
 
 
@@ -313,7 +325,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     # Get current running tasks
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        logging.debug('  Tasks: {}'.format(len(tasks)))
+        utils.print_ee_tasks()
         input('ENTER')
 
 
@@ -369,6 +381,14 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 continue
             elif wrs2_skip_list and wrs2_tile in wrs2_skip_list:
                 logging.info('{} {} ({}/{}) - in wrs2 skip list'.format(
+                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
+                continue
+            elif wrs2_row_skip_list and row in wrs2_row_skip_list:
+                logging.info('{} {} ({}/{}) - in wrs2 row skip list'.format(
+                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
+                continue
+            elif wrs2_path_skip_list and path in wrs2_path_skip_list:
+                logging.info('{} {} ({}/{}) - in wrs2 path skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
             else:
@@ -611,7 +631,13 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     'model_version': openet.sharpen.__version__,
                     'scale_factor': 1.0 / scale_factor,
                     'scene_id': scene_id,
+                    # CGM - Is this separate property still needed?
+                    # Having it named separately from model_version might make
+                    #   it easier to pass through to other models/calculations
                     'sharpen_version': openet.sharpen.__version__,
+                    # CGM - Tracking the SIMS version since it was used to build
+                    #   the image collection
+                    'sims_version': model.__version__,
                     'tool_name': TOOL_NAME,
                     'tool_version': TOOL_VERSION,
                     'wrs2_path': p,
@@ -772,7 +798,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         study_area_coll = study_area_coll.filter(
             ee.Filter.inList(study_area_property, study_area_features))
 
-    logging.info('Building MGRS tile list')
+    logging.debug('Building MGRS tile list')
     tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
         .filterBounds(study_area_coll.geometry())
 
@@ -853,10 +879,7 @@ def arg_parse():
         '-i', '--ini', type=utils.arg_valid_file,
         help='Input file', metavar='FILE')
     parser.add_argument(
-        '-o', '--overwrite', default=False, action='store_true',
-        help='Force overwrite of existing files')
-    parser.add_argument(
-        '-d', '--debug', default=logging.INFO, const=logging.DEBUG,
+        '--debug', default=logging.INFO, const=logging.DEBUG,
         help='Debug level logging', action='store_const', dest='loglevel')
     parser.add_argument(
         '--delay', default=0, type=float,
@@ -864,6 +887,9 @@ def arg_parse():
     parser.add_argument(
         '--key', type=utils.arg_valid_file, metavar='FILE',
         help='Earth Engine service account JSON key file')
+    parser.add_argument(
+        '--overwrite', default=False, action='store_true',
+        help='Force overwrite of existing files')
     parser.add_argument(
         '--ready', default=-1, type=int,
         help='Maximum number of queued READY tasks')
@@ -881,10 +907,10 @@ def arg_parse():
         '--update', default=False, action='store_true',
         help='Update images with older model version numbers')
     parser.add_argument(
-        '-s', '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
+        '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='Start date (format YYYY-MM-DD)')
     parser.add_argument(
-        '-e', '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
+        '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='End date (format YYYY-MM-DD)')
     args = parser.parse_args()
 
