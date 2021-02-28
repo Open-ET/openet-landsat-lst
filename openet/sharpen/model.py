@@ -63,7 +63,7 @@ class Model:
         cv_threshold = 0.15  # threshold to select homogeneous pixels
         bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']  # predictor bands
 
-        # TODO: Move to __init__
+        # TODO: Call from __init__?
         bound = self.image.geometry()
         crs = self.image.projection().crs()
         transform = self.getAffineTransform()
