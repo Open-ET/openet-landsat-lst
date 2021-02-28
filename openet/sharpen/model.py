@@ -1,9 +1,42 @@
 import ee
 
 
-# TODO: Move the "calculation" steps to a separate function
-#   Conceptually structure this like there were separate SR and TOA functions
-def landsat(image):
+# def lazy_property(fn):
+#     """Decorator that makes a property lazy-evaluated
+#
+#     https://stevenloria.com/lazy-properties/
+#     """
+#     attr_name = '_lazy_' + fn.__name__
+#
+#     @property
+#     def _lazy_property(self):
+#         if not hasattr(self, attr_name):
+#             setattr(self, attr_name, fn(self))
+#         return getattr(self, attr_name)
+#
+#     return _lazy_property
+
+
+class Model:
+    def __init__(self, image):
+        """
+
+        Parameters
+        ----------
+        input_img : ee.Image
+        sensor : str
+
+        """
+        self.image = image
+
+    # @lazy_property
+    def tir(self):
+        """Wrapper to the thermal function"""
+        return thermal(self.image)
+
+
+# TODO: Move into Model class
+def thermal(image):
     """Thermal sharpening algorithm
 
     Global-RF and local-SLR and a residual redistribution process

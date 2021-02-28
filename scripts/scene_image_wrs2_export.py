@@ -13,7 +13,6 @@ import ee
 from google.cloud import datastore
 
 import openet.sharpen
-import openet.sharpen.thermal
 import openet.core
 import openet.core.utils as utils
 # CGM - Using SIMS for building image ID list (for now)
@@ -566,36 +565,38 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
-                output_info = utils.get_info(ee.Image(image_id).select(['B2']))
+                output_info = utils.get_info(ee.Image(image_id).select([2]))
                 transform = '[{}]'.format(
                     ','.join(map(str, output_info['bands'][0]['crs_transform'])))
 
 
-
-                # TODO: Module should handle the band renaming and scaling
-                # Copied from PTJPL Image.from_landsat_c1_sr()
-                landsat_img = ee.Image(image_id)
-                input_bands = ee.Dictionary({
-                    'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-                    'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-                    'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
-                output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir',
-                                'pixel_qa']
-                spacecraft_id = ee.String(landsat_img.get('SATELLITE'))
-                prep_img = landsat_img \
-                    .select(input_bands.get(spacecraft_id), output_bands) \
-                    .multiply([0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]) \
-                    .set({'system:index': landsat_img.get('system:index'),
-                          'system:time_start': landsat_img.get('system:time_start'),
-                          'system:id': landsat_img.get('system:id'),
-                          'SATELLITE': spacecraft_id,
-                         })
-
-                # Compute the sharpened thermal image
-                output_img = openet.sharpen.thermal.landsat(prep_img) \
+                # Generate sharpened thermal image
+                output_img = openet.sharpen.Landsat(image_id).tir()\
                     .select(['tir_sharpened'], ['tir'])
 
-
+                # # DEADBEEF - Old code that prepped the image for sharpen.thermal
+                # # TODO: Module should handle the band renaming and scaling
+                # # Copied from PTJPL Image.from_landsat_c1_sr()
+                # landsat_img = ee.Image(image_id)
+                # input_bands = ee.Dictionary({
+                #     'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
+                #     'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
+                #     'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
+                # output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir',
+                #                 'pixel_qa']
+                # spacecraft_id = ee.String(landsat_img.get('SATELLITE'))
+                # prep_img = landsat_img \
+                #     .select(input_bands.get(spacecraft_id), output_bands) \
+                #     .multiply([0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]) \
+                #     .set({'system:index': landsat_img.get('system:index'),
+                #           'system:time_start': landsat_img.get('system:time_start'),
+                #           'system:id': landsat_img.get('system:id'),
+                #           'SATELLITE': spacecraft_id,
+                #          })
+                #
+                # # Compute the sharpened thermal image
+                # output_img = openet.sharpen.thermal.landsat(prep_img) \
+                #     .select(['tir_sharpened'], ['tir'])
 
 
                 # CGM - We will need to think this through a little bit more
