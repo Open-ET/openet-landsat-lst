@@ -10,10 +10,9 @@ import re
 import time
 
 import ee
-from google.cloud import datastore
+# from google.cloud import datastore
 
 import openet.sharpen
-import openet.sharpen.thermal
 import openet.core
 import openet.core.utils as utils
 # CGM - Using SIMS for building image ID list (for now)
@@ -21,11 +20,11 @@ import openet.sims as model
 # import openet.disalexi as model
 
 TOOL_NAME = 'tir_image_wrs2_export'
-TOOL_VERSION = '0.1.6'
+TOOL_VERSION = '0.1.7'
 
 
 def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
-         max_ready=-1, reverse_flag=False, tiles=None, update_flag=False,
+         ready_task_max=-1, reverse_flag=False, tiles=None, update_flag=False,
          log_tasks=True, recent_days=0, start_dt=None, end_dt=None):
     """Export Landsat sharpened thermal images
 
@@ -40,7 +39,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         number of queued tasks, see "max_ready" parameter).  The default is 0.
     gee_key_file : str, None, optional
         Earth Engine service account JSON key file (the default is None).
-    max_ready: int, optional
+    ready_task_max: int, optional
         Maximum number of queued "READY" tasks.  The default is -1 which is
         implies no limit to the number of tasks that will be submitted.
     reverse_flag : bool, optional
@@ -306,44 +305,51 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     utils.get_info(ee.Number(1))
 
 
-    # TODO: set datastore key file as a parameter?
-    datastore_key_file = 'openet-dri-datastore.json'
-    if log_tasks and not os.path.isfile(datastore_key_file):
-        logging.info('\nTask logging disabled, datastore key does not exist')
-        log_tasks = False
-        # input('ENTER')
-    if log_tasks:
-        logging.info('\nInitializing task datastore client')
-        try:
-            datastore_client = datastore.Client.from_service_account_json(
-                datastore_key_file)
-        except Exception as e:
-            logging.error('{}'.format(e))
-            return False
+    # # TODO: set datastore key file as a parameter?
+    # datastore_key_file = 'openet-dri-datastore.json'
+    # if log_tasks and not os.path.isfile(datastore_key_file):
+    #     logging.info('\nTask logging disabled, datastore key does not exist')
+    #     log_tasks = False
+    #     # input('ENTER')
+    # if log_tasks:
+    #     logging.info('\nInitializing task datastore client')
+    #     try:
+    #         datastore_client = datastore.Client.from_service_account_json(
+    #             datastore_key_file)
+    #     except Exception as e:
+    #         logging.error('{}'.format(e))
+    #         return False
 
 
     # Get current running tasks
     tasks = utils.get_ee_tasks()
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        utils.print_ee_tasks()
+        utils.print_ee_tasks(tasks)
         input('ENTER')
+    ready_task_count = len(tasks.keys())
+    logging.info(f'  Tasks: {ready_task_count}')
+    # CGM - I'm still not sure if it makes sense to hold here or after the
+    #   first task is started.
+    ready_task_count = delay_task(
+        delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
 
 
     # Build output collection and folder if necessary
-    logging.debug('\nExport Collection: {}'.format(scene_coll_id))
+    logging.debug(f'\nExport Collection: {scene_coll_id}')
     if not ee.data.getInfo(scene_coll_id.rsplit('/', 1)[0]):
-        logging.debug('\nFolder does not exist and will be built'
-                      '\n  {}'.format(scene_coll_id.rsplit('/', 1)[0]))
+        logging.debug(f'\nFolder does not exist and will be built'
+                      f'\n  {scene_coll_id.rsplit("/", 1)[0]}')
         input('Press ENTER to continue')
-        ee.data.createAsset({'type': 'FOLDER'}, scene_coll_id.rsplit('/', 1)[0])
+        ee.data.createAsset({'type': 'FOLDER'},
+                            scene_coll_id.rsplit('/', 1)[0])
     if not ee.data.getInfo(scene_coll_id):
-        logging.info('\nExport collection does not exist and will be built'
-                     '\n  {}'.format(scene_coll_id))
+        logging.info(f'\nExport collection does not exist and will be built'
+                     f'\n  {scene_coll_id}')
         input('Press ENTER to continue')
         ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, scene_coll_id)
 
 
-# Get list of MGRS tiles that intersect the study area
+    # Get list of MGRS tiles that intersect the study area
     logging.debug('\nMGRS Tiles/Zones')
     export_list = mgrs_export_tiles(
         study_area_coll_id=study_area_coll_id,
@@ -566,36 +572,38 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
                 #   the same for each wrs2 tile
-                output_info = utils.get_info(ee.Image(image_id).select(['B2']))
+                output_info = utils.get_info(ee.Image(image_id).select([2]))
                 transform = '[{}]'.format(
                     ','.join(map(str, output_info['bands'][0]['crs_transform'])))
 
 
-
-                # TODO: Module should handle the band renaming and scaling
-                # Copied from PTJPL Image.from_landsat_c1_sr()
-                landsat_img = ee.Image(image_id)
-                input_bands = ee.Dictionary({
-                    'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-                    'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-                    'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
-                output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir',
-                                'pixel_qa']
-                spacecraft_id = ee.String(landsat_img.get('SATELLITE'))
-                prep_img = landsat_img \
-                    .select(input_bands.get(spacecraft_id), output_bands) \
-                    .multiply([0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]) \
-                    .set({'system:index': landsat_img.get('system:index'),
-                          'system:time_start': landsat_img.get('system:time_start'),
-                          'system:id': landsat_img.get('system:id'),
-                          'SATELLITE': spacecraft_id,
-                         })
-
-                # Compute the sharpened thermal image
-                output_img = openet.sharpen.thermal.landsat(prep_img) \
+                # Generate sharpened thermal image
+                output_img = openet.sharpen.Landsat(image_id).thermal()\
                     .select(['tir_sharpened'], ['tir'])
 
-
+                # # DEADBEEF - Old code that prepped the image for sharpen.thermal
+                # # TODO: Module should handle the band renaming and scaling
+                # # Copied from PTJPL Image.from_landsat_c1_sr()
+                # landsat_img = ee.Image(image_id)
+                # input_bands = ee.Dictionary({
+                #     'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
+                #     'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
+                #     'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
+                # output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir',
+                #                 'pixel_qa']
+                # spacecraft_id = ee.String(landsat_img.get('SATELLITE'))
+                # prep_img = landsat_img \
+                #     .select(input_bands.get(spacecraft_id), output_bands) \
+                #     .multiply([0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]) \
+                #     .set({'system:index': landsat_img.get('system:index'),
+                #           'system:time_start': landsat_img.get('system:time_start'),
+                #           'system:id': landsat_img.get('system:id'),
+                #           'SATELLITE': spacecraft_id,
+                #          })
+                #
+                # # Compute the sharpened thermal image
+                # output_img = openet.sharpen.thermal.landsat(prep_img) \
+                #     .select(['tir_sharpened'], ['tir'])
 
 
                 # CGM - We will need to think this through a little bit more
@@ -700,34 +708,37 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
 
-                # Write the export task info the openet-dri project datastore
-                if log_tasks:
-                    logging.debug('    Writing datastore entity')
-                    try:
-                        task_obj = datastore.Entity(key=datastore_client.key(
-                            'Task', task.status()['id']),
-                            exclude_from_indexes=['properties'])
-                        for k, v in task.status().items():
-                            task_obj[k] = v
-                        # task_obj['date'] = datetime.datetime.today() \
-                        #     .strftime('%Y-%m-%d')
-                        task_obj['index'] = properties.pop('wrs2_tile')
-                        # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
-                        task_obj['model_name'] = properties.pop('model_name')
-                        # task_obj['model_version'] = properties.pop('model_version')
-                        task_obj['runtime'] = 0
-                        task_obj['start_timestamp_ms'] = 0
-                        task_obj['tool_name'] = properties.pop('tool_name')
-                        task_obj['properties'] = json.dumps(properties)
-                        datastore_client.put(task_obj)
-                    except Exception as e:
-                        # CGM - The message/handling will probably need to be updated
-                        #   We may want separate try/excepts on the create and the put
-                        logging.warning('\nDatastore entity was not written')
-                        logging.warning('{}\n'.format(e))
+                # # Write the export task info the openet-dri project datastore
+                # if log_tasks:
+                #     logging.debug('    Writing datastore entity')
+                #     try:
+                #         task_obj = datastore.Entity(key=datastore_client.key(
+                #             'Task', task.status()['id']),
+                #             exclude_from_indexes=['properties'])
+                #         for k, v in task.status().items():
+                #             task_obj[k] = v
+                #         # task_obj['date'] = datetime.datetime.today() \
+                #         #     .strftime('%Y-%m-%d')
+                #         task_obj['index'] = properties.pop('wrs2_tile')
+                #         # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
+                #         task_obj['model_name'] = properties.pop('model_name')
+                #         # task_obj['model_version'] = properties.pop('model_version')
+                #         task_obj['runtime'] = 0
+                #         task_obj['start_timestamp_ms'] = 0
+                #         task_obj['tool_name'] = properties.pop('tool_name')
+                #         task_obj['properties'] = json.dumps(properties)
+                #         datastore_client.put(task_obj)
+                #     except Exception as e:
+                #         # CGM - The message/handling will probably need to be updated
+                #         #   We may want separate try/excepts on the create and the put
+                #         logging.warning('\nDatastore entity was not written')
+                #         logging.warning('{}\n'.format(e))
 
                 # Pause before starting the next export task
-                utils.delay_task(delay_time, max_ready)
+                ready_task_count += 1
+                ready_task_count = delay_task(
+                    delay_time=delay_time, task_max=ready_task_max,
+                    task_count=ready_task_count)
 
                 logging.debug('')
 
@@ -870,6 +881,76 @@ def parse_landsat_id(system_index):
     return sensor, path, row, year, month, day
 
 
+# CGM - This is a modified copy of openet.utils.delay_task()
+#   It was changed to take and return the number of ready tasks
+#   This change may eventually be pushed to openet.utils.delay_task()
+def delay_task(delay_time=0, task_max=-1, task_count=0):
+    """Delay script execution based on number of READY tasks
+
+    Parameters
+    ----------
+    delay_time : float, int
+        Delay time in seconds between starting export tasks or checking the
+        number of queued tasks if "ready_task_max" is > 0.  The default is 0.
+        The delay time will be set to a minimum of 10 seconds if
+        ready_task_max > 0.
+    task_max : int, optional
+        Maximum number of queued "READY" tasks.
+    task_count : int
+        The current/previous/assumed number of ready tasks.
+        Value will only be updated if greater than or equal to ready_task_max.
+
+    Returns
+    -------
+    int : ready_task_count
+
+    """
+    if task_max > 3000:
+        raise ValueError('The maximum number of queued tasks must be less than 3000')
+
+    # Force delay time to be a positive value since the parameter used to
+    #   support negative values
+    if delay_time < 0:
+        delay_time = abs(delay_time)
+
+    if ((task_max is None or task_max <= 0) and (delay_time >= 0)):
+        # Assume task_max was not set and just wait the delay time
+        logging.debug(f'  Pausing {delay_time} seconds, not checking task list')
+        time.sleep(delay_time)
+        return 0
+    elif task_max and (task_count < task_max):
+        # Skip waiting or checking tasks if a maximum number of tasks was set
+        #   and the current task count is below the max
+        logging.debug(f'  Ready tasks: {task_count}')
+        return task_count
+
+    # If checking tasks, force delay_time to be at least 10 seconds if
+    #   ready_task_max is set to avoid excessive EE calls
+    delay_time = max(delay_time, 10)
+
+    # Make an initial pause before checking tasks lists to allow
+    #   for previous export to start up
+    # CGM - I'm not sure what a good default first pause time should be,
+    #   but capping it at 30 seconds is probably fine for now
+    logging.debug(f'  Pausing {min(delay_time, 30)} seconds for tasks to start')
+    time.sleep(delay_time)
+
+    # If checking tasks, don't continue to the next export until the number
+    #   of READY tasks is greater than or equal to "ready_task_max"
+    while True:
+        ready_task_count = len(utils.get_ee_tasks(states=['READY']).keys())
+        logging.debug(f'  Ready tasks: {ready_task_count}')
+        if ready_task_count >= task_max:
+            logging.debug(f'  Pausing {delay_time} seconds')
+            time.sleep(delay_time)
+        else:
+            logging.debug(f'  {task_max - ready_task_count} open task '
+                          f'slots, continuing processing')
+            break
+
+    return ready_task_count
+
+
 def arg_parse():
     """"""
     parser = argparse.ArgumentParser(
@@ -923,7 +1004,7 @@ if __name__ == '__main__':
     logging.getLogger('googleapiclient').setLevel(logging.ERROR)
 
     main(ini_path=args.ini, overwrite_flag=args.overwrite,
-         delay_time=args.delay, gee_key_file=args.key, max_ready=args.ready,
+         delay_time=args.delay, gee_key_file=args.key, ready_task_max=args.ready,
          reverse_flag=args.reverse, tiles=args.tiles, update_flag=args.update,
          recent_days=args.recent, start_dt=args.start, end_dt=args.end,
     )
