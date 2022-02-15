@@ -20,10 +20,11 @@ def test_ee_init():
 @pytest.mark.parametrize(
     'image_id',
     [
+        'LANDSAT/LT04/C02/T1_L2/LT04_044033_19830812',
+        'LANDSAT/LT05/C02/T1_L2/LT05_044033_20110716',
+        'LANDSAT/LE07/C02/T1_L2/LE07_044033_20170708',
         'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716',
-        # 'LANDSAT/LE07/C02/T1_L2/LE07_044033_20170724',
-        # 'LANDSAT/LT05/C02/T1_L2/LT05_044033_20110716',
-        # 'LANDSAT/LT04/C02/T1_L2/LT04_044033_19830812',
+        'LANDSAT/LC09/C02/T1_L2/LC09_044033_20220127',
     ]
 )
 def test_Landsat_C02_SR_band_names(image_id):
@@ -49,10 +50,10 @@ def test_Landsat_C02_SR_scaling():
 @pytest.mark.parametrize(
     'image_id',
     [
-        'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716',
-        'LANDSAT/LE07/C01/T1_SR/LE07_044033_20170724',
+        'LANDSAT/LT04/C01/T1_SR/LT04_044033_19830812',
         'LANDSAT/LT05/C01/T1_SR/LT05_044033_20110716',
-        # 'LANDSAT/LT04/C01/T1_SR/LT04_044033_19830812',
+        'LANDSAT/LE07/C01/T1_SR/LE07_044033_20170724',
+        'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716',
     ]
 )
 def test_Landsat_C01_SR_band_names(image_id):
@@ -78,10 +79,10 @@ def test_Landsat_C01_SR_scaling():
 @pytest.mark.parametrize(
     'image_id',
     [
-        'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716',
-        'LANDSAT/LE07/C01/T1_TOA/LE07_044033_20170724',
+        'LANDSAT/LT04/C01/T1_TOA/LT04_044033_19830812',
         'LANDSAT/LT05/C01/T1_TOA/LT05_044033_20110716',
-        # 'LANDSAT/LT04/C01/T1_TOA/LT04_044033_19830812',
+        'LANDSAT/LE07/C01/T1_TOA/LE07_044033_20170724',
+        'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716',
     ]
 )
 def test_Landsat_C01_TOA_band_names(image_id):
@@ -107,9 +108,9 @@ def test_Landsat_C01_TOA_scaling():
 @pytest.mark.parametrize(
     'image_id',
     [
-        'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716',
         'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716',
         'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716',
+        'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716',
     ]
 )
 def test_Landsat_band_names(image_id):

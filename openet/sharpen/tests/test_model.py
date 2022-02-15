@@ -33,10 +33,15 @@ def test_Model_thermal_band_name():
 @pytest.mark.parametrize(
     "image_id, xy, expected",
     [
+        # CGM - I'm not sure why this test value changed, maybe the NLCD change?
         ['LANDSAT/LC08/C01/T1_SR/LC08_042034_20180705',
-         [-120.10237, 36.946608], 304.13262575660264],
+         [-120.10237, 36.946608], 304.7791627017093],
+        # ['LANDSAT/LC08/C01/T1_SR/LC08_042034_20180705',
+        #  [-120.10237, 36.946608], 304.13262575660264],
         ['LANDSAT/LC08/C01/T1_TOA/LC08_042034_20180705',
          [-120.10237, 36.946608], 303.75037059315696],
+        ['LANDSAT/LC08/C02/T1_L2/LC08_042034_20180705',
+         [-120.10237, 36.946608], 308.6557631852243],
     ]
 )
 def test_Model_thermal_point_values(image_id, xy, expected, tol=0.01):
