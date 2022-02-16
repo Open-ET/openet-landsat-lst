@@ -111,6 +111,7 @@ def test_Landsat_C01_TOA_scaling():
         'LANDSAT/LC08/C01/T1_SR/LC08_044033_20170716',
         'LANDSAT/LC08/C01/T1_TOA/LC08_044033_20170716',
         'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716',
+        'LANDSAT/LC09/C02/T1_L2/LC09_044033_20220127',
     ]
 )
 def test_Landsat_band_names(image_id):

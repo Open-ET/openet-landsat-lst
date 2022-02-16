@@ -50,12 +50,16 @@ class Model:
 
         """
         tir_res_dict = ee.Dictionary({
-            'LANDSAT_4': 120, 'LANDSAT_5': 120, 'LANDSAT_7': 60, 'LANDSAT_8': 100})
+            'LANDSAT_4': 120, 'LANDSAT_5': 120, 'LANDSAT_7': 60,
+            'LANDSAT_8': 100, 'LANDSAT_9': 100,
+        })
         tir_res = ee.Number(tir_res_dict.get(self.image.get('SATELLITE')))
 
         # Apply energy conservation step with a slighter large window to reduce blurry effect
         ec_window_dict = ee.Dictionary({
-            'LANDSAT_4': 120, 'LANDSAT_5': 120, 'LANDSAT_7': 90, 'LANDSAT_8': 120})
+            'LANDSAT_4': 120, 'LANDSAT_5': 120, 'LANDSAT_7': 90,
+            'LANDSAT_8': 120, 'LANDSAT_9': 120,
+        })
         ec_window = ee.Number(ec_window_dict.get(self.image.get('SATELLITE')))
 
         kernel_size = 20  # kernel radius for local linear regression,
@@ -113,6 +117,7 @@ class Model:
             .arrayFlatten([band_names]) \
             .reproject(crs, transform)
 
+        # CGM - Not used below
         rmse = local_fit.select('residuals').arrayFlatten([['residuals']]).pow(0.25)
 
         # Apply linear fit at high resolution for sharpened TIR
