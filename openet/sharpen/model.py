@@ -28,7 +28,7 @@ class Model:
                 (i.e. blue, green, red, nir, swir1, swir2, tir).
             Thermal band must be named 'tir' and be in units of Kelvin.
             Must have property 'SATELLITE' with a value of 'LANDSAT_4',
-                'LANDSAT_5', 'LANDSAT_7', or 'LANDSAT_8'.
+                'LANDSAT_5', 'LANDSAT_7', 'LANDSAT_8', or 'LANDSAT_9'.
 
         """
         self.image = image
