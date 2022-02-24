@@ -21,12 +21,17 @@ import openet.sims as model
 # import openet.disalexi as model
 
 TOOL_NAME = 'tir_image_wrs2_export'
-TOOL_VERSION = '0.1.8'
+TOOL_VERSION = '0.2.1'
+
+logging.getLogger("googleapiclient").setLevel(logging.INFO)
+logging.getLogger("urllib3").setLevel(logging.INFO)
 
 
-def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
-         ready_task_max=-1, reverse_flag=False, tiles=None, update_flag=False,
-         log_tasks=True, recent_days=None, start_dt=None, end_dt=None):
+def main(ini_path=None, overwrite_flag=False,
+         delay_time=0, ready_task_max=-1, gee_key_file=None,
+         reverse_flag=False, tiles=None, update_flag=False,
+         log_tasks=False, recent_days=None, start_dt=None, end_dt=None
+         ):
     """Export Landsat sharpened thermal images
 
     Parameters
@@ -45,8 +50,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         implies no limit to the number of tasks that will be submitted.
     reverse_flag : bool, optional
         If True, process WRS2 tiles in reverse order (the default is False).
-    tiles : str, None, optional
-        List of MGRS tiles to process (the default is None).
+    tiles : str, optional
+        Comma separated UTM zones or MGRS tiles to process (the default is None).
     update_flag : bool, optional
         If True, only overwrite scenes with an older model version.
     log_tasks : bool, optional
@@ -85,7 +90,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         'p034r039', 'p033r039', # Mexico (by New Mexico)
         'p032r040',  # Mexico (West Texas)
         'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (South Texas)
-        'p019r040', # West Florida coast
+        'p019r040', 'p018r040', # West Florida coast
         'p016r043', 'p015r043', # South Florida coast
         'p014r041', 'p014r042', 'p014r043', # East Florida coast
         'p013r035', 'p013r036', # North Carolina Outer Banks
@@ -94,7 +99,6 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     ]
     wrs2_path_skip_list = [9, 49]
     wrs2_row_skip_list = [25, 24, 43]
-
     mgrs_skip_list = []
 
     export_id_fmt = '{model}_{index}'
@@ -243,11 +247,13 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
     except Exception as e:
         raise e
 
+
     # If the user set the tiles argument, use these instead of the INI values
     if tiles:
         logging.info('\nOverriding INI mgrs_tiles and utm_zones parameters')
         logging.info(f'  user tiles: {tiles}')
-        mgrs_tiles = sorted([y.strip() for x in tiles for y in x.split(',')])
+        mgrs_tiles = sorted([x.strip() for x in tiles.split(',')])
+        # mgrs_tiles = sorted([y.strip() for x in tiles for y in x.split(',')])
         mgrs_tiles = [x.upper() for x in mgrs_tiles if x]
         logging.info(f'  mgrs_tiles: {", ".join(mgrs_tiles)}')
         utm_zones = sorted(list(set([int(x[:2]) for x in mgrs_tiles])))
@@ -255,17 +261,17 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
     today_dt = datetime.datetime.now()
     today_dt = today_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-    if recent_days:
-        logging.info('\nOverriding INI "start_date" and "end_date" parameters')
-        logging.info(f'  Recent days: {recent_days}')
-        end_dt = today_dt - datetime.timedelta(days=1)
-        start_dt = today_dt - datetime.timedelta(days=recent_days)
-        start_date = start_dt.strftime('%Y-%m-%d')
-        end_date = end_dt.strftime('%Y-%m-%d')
-    elif start_dt and end_dt:
+    if start_dt and end_dt:
         # Attempt to use the function start/end dates
         logging.info('\nOverriding INI "start_date" and "end_date" parameters')
         logging.info('  Custom date range')
+        start_date = start_dt.strftime('%Y-%m-%d')
+        end_date = end_dt.strftime('%Y-%m-%d')
+    elif recent_days:
+        logging.debug('\nOverriding INI "start_date" and "end_date" parameters')
+        logging.debug(f'  Recent days: {recent_days}')
+        end_dt = today_dt - datetime.timedelta(days=1)
+        start_dt = today_dt - datetime.timedelta(days=recent_days)
         start_date = start_dt.strftime('%Y-%m-%d')
         end_date = end_dt.strftime('%Y-%m-%d')
     else:
@@ -284,61 +290,51 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         raise ValueError('end date can not be before start date')
 
     logging.debug('\nFilter date range')
-    iter_start_dt = start_dt
-    iter_end_dt = end_dt + datetime.timedelta(days=1)
-    # iter_start_dt = start_dt - datetime.timedelta(days=interp_days)
-    # iter_end_dt = end_dt + datetime.timedelta(days=interp_days+1)
-    logging.debug(f'  Start: {iter_start_dt.strftime("%Y-%m-%d")}')
-    logging.debug(f'  End:   {iter_end_dt.strftime("%Y-%m-%d")}')
+    filter_end_dt = end_dt + datetime.timedelta(days=1)
+    filter_end_date = filter_end_dt.strftime("%Y-%m-%d")
+    logging.debug(f'  Start: {start_date}')
+    logging.debug(f'  End:   {filter_end_date}')
 
 
-    logging.info('\nInitializing Earth Engine')
-    if gee_key_file:
-        logging.info(f'  Using service account key file: {gee_key_file}')
-        # The "EE_ACCOUNT"  doesn't seem to be used if the key file is valid
-        ee.Initialize(ee.ServiceAccountCredentials('test', key_file=gee_key_file))
-    else:
-        logging.info(f'  Using user credentials')
-        ee.Initialize()
-
-
-    # TODO: set datastore key file as a parameter?
-    datastore_key_file = 'openet-dri-datastore.json'
-    if log_tasks and not os.path.isfile(datastore_key_file):
-        logging.info('\nTask logging disabled, datastore key does not exist')
-        log_tasks = False
-        # input('ENTER')
+    # Setup datastore task logging
     if log_tasks:
-        logging.info('\nInitializing task datastore client')
+        # Assume function is being run deployed as a cloud function
+        #   and use the defult credentials (should be the SA credentials)
+        logging.debug('\nInitializing task datastore client')
         try:
-            datastore_client = datastore.Client.from_service_account_json(
-                datastore_key_file)
+            datastore_client = datastore.Client(project='openet-dri')
         except Exception as e:
-            logging.error(f'{e}')
+            logging.info('  Task logging disabled, error setting up datastore client')
+            log_tasks = False
+
+
+    # Initialize Earth Engine
+    if gee_key_file:
+        logging.info(f'\nInitializing GEE using user key file: {gee_key_file}')
+        try:
+            ee.Initialize(ee.ServiceAccountCredentials('_', key_file=gee_key_file))
+        except ee.ee_exception.EEException:
+            logging.warning('Unable to initialize GEE using user key file')
             return False
-
-
-    # Get current running tasks
-    if ready_task_max == -9999:
-        # CGM - Getting the task list can take awhile so set ready tasks to
-        #   -9999 to skip requesting it.  Only run this if you are going to
-        #   manually avoid running existing tasks.
-        # TODO: Check if this should disable delay_task() or set the
-        #   ready_task_max to a large value
-        tasks = {}
-        ready_task_count = 0
+    elif 'FUNCTION_REGION' in os.environ:
+        # Assume code is deployed to a cloud function
+        logging.debug(f'\nInitializing GEE using application default credentials')
+        import google.auth
+        credentials, project_id = google.auth.default(
+            default_scopes=['https://www.googleapis.com/auth/earthengine'])
+        ee.Initialize(credentials)
+    # elif 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+    #     logging.info(f'\nInitializing GEE using GOOGLE_APPLICATION_CREDENTIALS key')
+    #     try:
+    #         ee.Initialize(ee.ServiceAccountCredentials(
+    #             "_", key_file=os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')))
+    #     except Exception as e:
+    #         logging.warning('Unable to initialize GEE using '
+    #                         'GOOGLE_APPLICATION_CREDENTIALS key file')
+    #         return False
     else:
-        logging.info('\nRequesting Task List')
-        tasks = utils.get_ee_tasks()
-        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            utils.print_ee_tasks(tasks)
-            input('ENTER')
-        ready_task_count = len(tasks.keys())
-        logging.info(f'  Tasks: {ready_task_count}')
-        # CGM - I'm still not sure if it makes sense to hold here or after the
-        #   first task is started.
-        ready_task_count = delay_task(
-            delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
+        logging.info('\nInitializing Earth Engine using user credentials')
+        ee.Initialize()
 
 
     # Build output collection and folder if necessary
@@ -356,7 +352,28 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         ee.data.createAsset({'type': 'IMAGE_COLLECTION'}, scene_coll_id)
 
 
-    # Get list of MGRS tiles that intersect the study area
+    # Get current running tasks
+    if ready_task_max == -9999:
+        # CGM - Getting the task list can take awhile so set ready tasks to
+        #   -9999 to skip requesting it.  Only run this if you are going to
+        #   manually avoid running existing tasks.
+        # TODO: Check if this should disable delay_task() or set the
+        #   ready_task_max to a large value
+        tasks = {}
+        ready_task_count = 0
+    else:
+        tasks = utils.get_ee_tasks()
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            utils.print_ee_tasks(tasks)
+            input('ENTER')
+        ready_task_count = sum(1 for t in tasks.values() if t['state'] == 'READY')
+        # ready_task_count = len(tasks.keys())
+        # Hold the job here if the ready task count is already over the max
+        ready_task_count = delay_task(
+            delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
+
+
+    # Get list of MGRS tiles/zones that intersect the study area
     logging.debug('\nMGRS Tiles/Zones')
     export_list = mgrs_export_tiles(
         study_area_coll_id=study_area_coll_id,
@@ -376,8 +393,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
 
     # Process each WRS2 tile separately
-    logging.debug('\nImage Exports')
-    wrs2_tiles = []
+    logging.info('')
+    logging.debug('Image Exports')
+    processed_image_ids = set()
+    # processed_wrs2_tiles = []
     for export_info in sorted(export_list, key=lambda i: i['index'],
                               reverse=reverse_flag):
         logging.debug(f'{export_info["index"]}')
@@ -385,25 +404,68 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
         #     export_info['index'], ', '.join(export_info['wrs2_tiles'])))
         tile_count = len(export_info['wrs2_tiles'])
         tile_list = sorted(export_info['wrs2_tiles'], reverse=not(reverse_flag))
+        tile_geom = ee.Geometry.Rectangle(
+            export_info['extent'], export_info['crs'], False)
 
+        # Get the available image ID list for the zone
+        # Get list of existing image assets and their properties for the zone
+        # Process date range by years to avoid requesting more than 3000 images
+        logging.debug('  Getting list of available model images and existing assets')
+        export_image_id_list = []
+        asset_props = {}
+        for year_start_dt, year_end_dt in date_range_by_year(
+                start_dt, end_dt, exclusive_end_dates=True):
+            year_start_date = year_start_dt.strftime("%Y-%m-%d")
+            year_end_date = year_end_dt.strftime("%Y-%m-%d")
+            logging.debug(f'  {year_start_date} {year_end_date}')
 
-        # TODO: Add error checking for long time periods when number of images
-        #   in getInfo call may exceed 3000 limit
-        # Get the image and asset lists for the full zone
-        # Collection end date is exclusive
-        model_obj = model.Collection(
-            collections=collections,
-            cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
-            start_date=iter_start_dt.strftime('%Y-%m-%d'),
-            end_date=iter_end_dt.strftime('%Y-%m-%d'),
-            geometry=ee.Geometry.Rectangle(export_info['extent'],
-                                           export_info['crs'], False),
-            # model_args={},
-            # filter_args=filter_args,
-        )
-        logging.debug('  Getting image IDs from EarthEngine')
-        export_image_id_list = utils.get_info(ee.List(model_obj.overpass(
-            variables=['ndvi']).aggregate_array('image_id')))
+            # Buffer the tile geometry a bit, but filter to the WRS2 tile list below
+            # This is needed because the Landsat 7 and 8 footprints are different
+            # For tile p027r031, L7 is being included but not L8 in zone 14T,
+            # Adding a buffer helps prevent that tile but causes other ones to
+            #   have the same problem
+            logging.debug('  Getting list of available model images')
+            model_obj = model.Collection(
+                collections=collections,
+                cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
+                start_date=start_date,
+                end_date=filter_end_date,
+                geometry=tile_geom.buffer(1000),
+                # model_args={},
+                # filter_args=filter_args,
+            )
+            year_image_id_list = utils.get_info(ee.List(model_obj.overpass(
+                variables=['ndvi']).aggregate_array('image_id')))
+
+            # Filter to the wrs2_tile list
+            # The WRS2 tile filtering should be done in the Collection call above,
+            #   but not all of the models support this
+            year_image_id_list = [
+                x for x in year_image_id_list
+                if 'p{}r{}'.format(*re.findall('_(\d{3})(\d{3})_', x)[0]) in tile_list
+            ]
+
+            # Filter image_ids that have already been processed as part of a
+            #   different MGRS tile (might be faster with sets)
+            year_image_id_list = [x for x in year_image_id_list
+                                  if x not in processed_image_ids]
+            # Keep track of all the image_ids that have been processed
+            processed_image_ids.update(year_image_id_list)
+
+            export_image_id_list.extend(year_image_id_list)
+
+             # Get list of existing image assets and their properties
+            logging.debug('  Getting list of existing model assets')
+            asset_coll = ee.ImageCollection(scene_coll_id) \
+                .filterDate(start_date, filter_end_date) \
+                .filterBounds(ee.Geometry.Rectangle(export_info['extent'],
+                                                    export_info['crs'], False)) \
+                .filter(ee.Filter.inList('wrs2_tile', tile_list))
+            year_asset_props = {
+                f'{scene_coll_id}/{x["properties"]["system:index"]}': x['properties']
+                for x in utils.get_info(asset_coll)['features']}
+            asset_props.update(year_asset_props)
+
         if not export_image_id_list:
             logging.info('  No Landsat images in date range, skipping zone')
             continue
@@ -420,26 +482,18 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 continue
             image_id_lists[wrs2_tile].append(image_id)
 
-        # Get list of existing image assets and their properties
-        logging.debug('  Getting GEE asset list')
-        asset_coll = ee.ImageCollection(scene_coll_id) \
-            .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-                        iter_end_dt.strftime('%Y-%m-%d')) \
-            .filterBounds(ee.Geometry.Rectangle(export_info['extent'],
-                                                export_info['crs'], False)) \
-            .filter(ee.Filter.inList('wrs2_tile', tile_list))
-        asset_props = {f'{scene_coll_id}/{x["properties"]["system:index"]}':
-                           x['properties']
-                       for x in utils.get_info(asset_coll)['features']}
-
 
         for export_n, wrs2_tile in enumerate(tile_list):
             path, row = map(int, wrs2_tile_re.findall(wrs2_tile)[0])
-            if wrs2_tile in wrs2_tiles:
-                logging.debug('{} {} ({}/{}) - already processed'.format(
-                    export_info['index'], wrs2_tile, export_n + 1, tile_count))
-                continue
-            elif wrs2_skip_list and wrs2_tile in wrs2_skip_list:
+            # DEADBEEF Tracking processed image_ids instead of processed wrs2_tiles
+            # The L7 and L8 footprints are slightly different so processing the
+            #   wrs2 tile does not mean that all of the images were processed
+            # if wrs2_tile in wrs2_tiles:
+            #     logging.debug('{} {} ({}/{}) - already processed'.format(
+            #         export_info['index'], wrs2_tile, export_n + 1, tile_count))
+            #     continue
+            # processed_wrs2_tiles.append(wrs2_tile)
+            if wrs2_skip_list and wrs2_tile in wrs2_skip_list:
                 logging.debug('{} {} ({}/{}) - in wrs2 skip list'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
@@ -452,9 +506,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
                 continue
             else:
-                logging.info('{} {} ({}/{})'.format(
+                logging.debug('{} {} ({}/{})'.format(
                     export_info['index'], wrs2_tile, export_n + 1, tile_count))
-            wrs2_tiles.append(wrs2_tile)
 
             # path, row = map(int, wrs2_tile_re.findall(export_info['index'])[0])
             # logging.info('WRS2 tile: {}  ({}/{})'.format(
@@ -490,8 +543,8 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             # model_obj = model.Collection(
             #     collections=collections,
             #     cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
-            #     start_date=iter_start_dt.strftime('%Y-%m-%d'),
-            #     end_date=iter_end_dt.strftime('%Y-%m-%d'),
+            #     start_date=start_date,
+            #     end_date=filter_end_date,
             #     geometry=ee.Geometry.Point(openet.core.wrs2.centroids[wrs2_tile]),
             #     # model_args={},
             #     filter_args=filter_args,
@@ -508,8 +561,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
             # # Get list of existing images for the target tile
             # logging.debug('  Getting GEE asset list')
             # asset_coll = ee.ImageCollection(scene_coll_id) \
-            #     .filterDate(iter_start_dt.strftime('%Y-%m-%d'),
-            #                 iter_end_dt.strftime('%Y-%m-%d')) \
+            #     .filterDate(start_date, filter_end_date) \
             #     .filterMetadata('wrs2_tile', 'equals',
             #                     wrs2_tile_fmt.format(path, row))
             # asset_props = {f'{scene_coll_id}/{x["properties"]["system:index"]}':
@@ -549,10 +601,17 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                 export_id += export_id_name
                 asset_id = f'{scene_coll_id}/{scene_id.lower()}'
 
+                logging.debug(f'{scene_id}')
+                logging.debug(f'  Source: {image_id}')
+                # logging.debug(f'  Date: {image_date}')
+                # logging.debug(f'  DOY:  {doy}')
+                logging.debug(f'  Export ID:  {export_id}')
+                logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
+                # logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
+
                 if update_flag:
-                    logging.info(f'{image_id}')
                     if export_id in tasks.keys():
-                        logging.info('  Task already submitted, skipping')
+                        logging.debug(f'  {scene_id} - Task already submitted, skipping')
                         continue
                     elif asset_props and asset_id in asset_props.keys():
                         # In update mode only overwrite if the version is old
@@ -564,14 +623,13 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         #     if b in ['et', 'et_reference']]
 
                         if asset_ver < model_ver:
-                            logging.info('  Existing asset model version is old, '
-                                         'removing')
+                            logging.info(f'  {scene_id} - Existing asset model version is old, removing')
                             logging.debug(f'  asset: {asset_ver}\n'
                                           f'  model: {model_ver}')
                             try:
                                 ee.data.deleteAsset(asset_id)
                             except:
-                                logging.info('  Error removing asset, skipping')
+                                logging.info(f'  {scene_id} - Error removing asset, skipping')
                                 continue
                         elif ((('T1_RT_TOA' in asset_props[asset_id]['coll_id']) and
                                ('T1_RT_TOA' not in image_id)) or
@@ -583,7 +641,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                             try:
                                 ee.data.deleteAsset(asset_id)
                             except:
-                                logging.info('  Error removing asset, skipping')
+                                logging.info(f'  {scene_id} - Error removing asset, skipping')
                                 continue
                         # elif (version_number(asset_props[asset_id]['tool_version']) <
                         #       version_number(TOOL_VERSION)):
@@ -606,35 +664,25 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                         #     input('ENTER')
                         #     ee.data.deleteAsset(asset_id)
                         else:
-                            logging.info(f'  Asset is up to date, skipping')
+                            logging.debug(f'  {scene_id} - Asset is up to date, skipping')
                             continue
                 elif overwrite_flag:
-                    logging.info(f'  {image_id}')
                     if export_id in tasks.keys():
-                        logging.info('  Task already submitted, cancelling')
+                        logging.info(f'  {scene_id} - Task already submitted, cancelling')
                         ee.data.cancelTask(tasks[export_id]['id'])
                         # ee.data.cancelOperation(tasks[export_id]['id'])
                     # This is intentionally not an "elif" so that a task can be
                     # cancelled and an existing image/file/asset can be removed
                     if asset_props and asset_id in asset_props.keys():
-                        logging.info('  Asset already exists, removing')
+                        logging.info(f'  {scene_id} - Asset already exists, removing')
                         ee.data.deleteAsset(asset_id)
                 else:
                     if export_id in tasks.keys():
-                        logging.info(f'{image_id}\n  Task already submitted, skipping')
+                        logging.debug(f'  {scene_id} - Task already submitted, skipping')
                         continue
                     elif asset_props and asset_id in asset_props.keys():
-                        logging.debug(f'{image_id}\n  Asset already exists, skipping')
+                        logging.debug(f'  {scene_id} - Asset already exists, skipping')
                         continue
-                    else:
-                        logging.info(f'{image_id}')
-
-                # logging.info(f'{image_id}')
-                logging.debug(f'  Date: {image_date}')
-                # logging.debug(f'  DOY: {doy}')
-                logging.debug(f'  Export ID:  {export_id}')
-                logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
-                logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
 
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be
@@ -757,10 +805,10 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
                             # raise e
 
                 if not task:
-                    logging.warning('  Export task was not built, skipping')
+                    logging.warning(f'  {scene_id} - Export task was not built, skipping')
                     continue
 
-                logging.info('  Starting export task')
+                logging.info(f'  {scene_id} - Starting export task')
                 for i in range(1, max_retries):
                     try:
                         task.start()
@@ -774,7 +822,7 @@ def main(ini_path=None, overwrite_flag=False, delay_time=0, gee_key_file=None,
 
                 # Write the export task info the openet-dri project datastore
                 if log_tasks:
-                    logging.debug('  Writing datastore entity')
+                    # logging.debug('  Writing datastore entity')
                     try:
                         task_obj = datastore.Entity(key=datastore_client.key(
                             'Task', task.status()['id']),
@@ -928,6 +976,35 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
     return export_list
 
 
+def date_range_by_year(start_dt, end_dt, exclusive_end_dates=False):
+    """
+
+    Parameters
+    ----------
+    start_dt : datetime
+    end_dt : datetime
+    exclusive_end_dates : bool, optional
+        If True, set the end dates for each iteration range to be exclusive.
+
+    Returns
+    -------
+    list of start and end datetimes split by year
+
+    """
+    if (end_dt - start_dt).days > 366:
+        for year in range(start_dt.year, end_dt.year+1):
+            year_start_dt = max(datetime.datetime(year, 1, 1), start_dt)
+            year_end_dt = datetime.datetime(year+1, 1, 1) - datetime.timedelta(days=1)
+            year_end_dt = min(year_end_dt, end_dt)
+            if exclusive_end_dates:
+                year_end_dt = year_end_dt + datetime.timedelta(days=1)
+            yield year_start_dt, year_end_dt
+    else:
+        if exclusive_end_dates:
+            year_end_dt = end_dt + datetime.timedelta(days=1)
+        yield start_dt, year_end_dt
+
+
 def parse_landsat_id(system_index):
     """Return the components of an EE Landsat Collection 1 system:index
 
@@ -1032,39 +1109,42 @@ def arg_parse():
         '-i', '--ini', type=utils.arg_valid_file,
         help='Input file', metavar='FILE')
     parser.add_argument(
-        '--debug', default=logging.INFO, const=logging.DEBUG,
-        help='Debug level logging', action='store_const', dest='loglevel')
-    parser.add_argument(
-        '--delay', default=0, type=float,
-        help='Delay (in seconds) between each export tasks')
-    parser.add_argument(
         '--key', type=utils.arg_valid_file, metavar='FILE',
         help='Earth Engine service account JSON key file')
-    parser.add_argument(
-        '--overwrite', default=False, action='store_true',
-        help='Force overwrite of existing files')
-    parser.add_argument(
-        '--ready', default=-1, type=int,
-        help='Maximum number of queued READY tasks')
     parser.add_argument(
         '--recent', default='',
         help='Day range (or number of days) to process before current date '
              '(ignore INI start_date and end_date')
-    parser.add_argument(
-        '--reverse', default=False, action='store_true',
-        help='Process WRS2 tiles in reverse order')
-    parser.add_argument(
-        '--tiles', default='', nargs='+',
-        help='Comma/space separated list of tiles to process')
-    parser.add_argument(
-        '--update', default=False, action='store_true',
-        help='Update images with older model version numbers')
     parser.add_argument(
         '--start', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='Start date (format YYYY-MM-DD)')
     parser.add_argument(
         '--end', type=utils.arg_valid_date, metavar='DATE', default=None,
         help='End date (format YYYY-MM-DD)')
+    parser.add_argument(
+        '--tiles', default='',
+        help='Comma separated list of UTM zones or MGRS tiles to process')
+    parser.add_argument(
+        '--delay', default=0, type=float,
+        help='Delay (in seconds) between each export tasks')
+    parser.add_argument(
+        '--ready', default=-1, type=int,
+        help='Maximum number of queued READY tasks')
+    parser.add_argument(
+        '--log_tasks', default=False, action='store_true',
+        help='Log tasks to the datastore')
+    parser.add_argument(
+        '--overwrite', default=False, action='store_true',
+        help='Force overwrite of existing files')
+    parser.add_argument(
+        '--reverse', default=False, action='store_true',
+        help='Process WRS2 tiles in reverse order')
+    parser.add_argument(
+        '--update', default=False, action='store_true',
+        help='Update images with older model version numbers')
+    parser.add_argument(
+        '--debug', default=logging.INFO, const=logging.DEBUG,
+        help='Debug level logging', action='store_const', dest='loglevel')
     args = parser.parse_args()
 
     return args
@@ -1073,10 +1153,10 @@ def arg_parse():
 if __name__ == '__main__':
     args = arg_parse()
     logging.basicConfig(level=args.loglevel, format='%(message)s')
-    logging.getLogger('googleapiclient').setLevel(logging.ERROR)
 
-    main(ini_path=args.ini, overwrite_flag=args.overwrite,
-         delay_time=args.delay, gee_key_file=args.key, ready_task_max=args.ready,
-         reverse_flag=args.reverse, tiles=args.tiles, update_flag=args.update,
-         recent_days=args.recent, start_dt=args.start, end_dt=args.end,
+    main(ini_path=args.ini, gee_key_file=args.key, recent_days=args.recent,
+         start_dt=args.start, end_dt=args.end, tiles=args.tiles,
+         delay_time=args.delay, ready_task_max=args.ready,
+         log_tasks=args.log_tasks, reverse_flag=args.reverse,
+         overwrite_flag=args.overwrite, update_flag=args.update,
     )
