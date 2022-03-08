@@ -399,7 +399,7 @@ def main(ini_path=None, overwrite_flag=False,
     # processed_wrs2_tiles = []
     for export_info in sorted(export_list, key=lambda i: i['index'],
                               reverse=reverse_flag):
-        logging.debug(f'{export_info["index"]}')
+        logging.info(f'{export_info["index"]}')
         # logging.debug('  {} - {}'.format(
         #     export_info['index'], ', '.join(export_info['wrs2_tiles'])))
         tile_count = len(export_info['wrs2_tiles'])
@@ -434,8 +434,16 @@ def main(ini_path=None, overwrite_flag=False,
                 # model_args={},
                 # filter_args=filter_args,
             )
-            year_image_id_list = utils.get_info(ee.List(model_obj.overpass(
-                variables=['ndvi']).aggregate_array('image_id')))
+            try:
+                year_image_id_list = model_obj.get_image_ids()
+            except Exception as e:
+                # Get the image ID list from an NDVI collection if get_image_ids()
+                #   doesn't work
+                logging.info('  Could not get image IDs from collection method')
+                year_image_id_list = utils.get_info(
+                    ee.List(model_obj.overpass(variables=['ndvi'])
+                            .aggregate_array('image_id')),
+                    max_retries=10)
 
             # Filter to the wrs2_tile list
             # The WRS2 tile filtering should be done in the Collection call above,
