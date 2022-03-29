@@ -428,8 +428,8 @@ def main(ini_path=None, overwrite_flag=False,
             model_obj = model.Collection(
                 collections=collections,
                 cloud_cover_max=float(ini['INPUTS']['cloud_cover']),
-                start_date=start_date,
-                end_date=filter_end_date,
+                start_date=year_start_date,
+                end_date=year_end_date,
                 geometry=tile_geom.buffer(1000),
                 # model_args={},
                 # filter_args=filter_args,
@@ -465,10 +465,9 @@ def main(ini_path=None, overwrite_flag=False,
              # Get list of existing image assets and their properties
             logging.debug('  Getting list of existing model assets')
             asset_coll = ee.ImageCollection(scene_coll_id) \
-                .filterDate(start_date, filter_end_date) \
-                .filterBounds(ee.Geometry.Rectangle(export_info['extent'],
-                                                    export_info['crs'], False)) \
-                .filter(ee.Filter.inList('wrs2_tile', tile_list))
+                .filterDate(year_start_date, year_end_date) \
+                .filter(ee.Filter.inList('wrs2_tile', tile_list)) \
+                .filterBounds(tile_geom)
             year_asset_props = {
                 f'{scene_coll_id}/{x["properties"]["system:index"]}': x['properties']
                 for x in utils.get_info(asset_coll)['features']}
