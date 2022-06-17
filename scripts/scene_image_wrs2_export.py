@@ -393,8 +393,7 @@ def main(ini_path=None, overwrite_flag=False,
 
 
     # Process each WRS2 tile separately
-    logging.info('')
-    logging.debug('Image Exports')
+    logging.info('\nImage Exports')
     processed_image_ids = set()
     # processed_wrs2_tiles = []
     for export_info in sorted(export_list, key=lambda i: i['index'],
@@ -608,14 +607,6 @@ def main(ini_path=None, overwrite_flag=False,
                 export_id += export_id_name
                 asset_id = f'{scene_coll_id}/{scene_id.lower()}'
 
-                logging.debug(f'{scene_id}')
-                logging.debug(f'  Source: {image_id}')
-                # logging.debug(f'  Date: {image_date}')
-                # logging.debug(f'  DOY:  {doy}')
-                logging.debug(f'  Export ID:  {export_id}')
-                logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
-                # logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
-
                 if update_flag:
                     if export_id in tasks.keys():
                         logging.debug(f'  {scene_id} - Task already submitted, skipping')
@@ -690,6 +681,13 @@ def main(ini_path=None, overwrite_flag=False,
                     elif asset_props and asset_id in asset_props.keys():
                         logging.debug(f'  {scene_id} - Asset already exists, skipping')
                         continue
+
+                logging.debug(f'  Source: {image_id}')
+                # logging.debug(f'  Date: {image_date}')
+                # logging.debug(f'  DOY:  {doy}')
+                logging.debug(f'  Export ID:  {export_id}')
+                logging.debug(f'  Collection: {os.path.dirname(asset_id)}')
+                # logging.debug(f'  Image ID:   {os.path.basename(asset_id)}')
 
                 # CGM: We could pre-compute (or compute once and then save)
                 #   the crs, transform, and shape since they should (will?) be

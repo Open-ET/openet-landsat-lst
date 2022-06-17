@@ -189,7 +189,7 @@ class Model:
 
         # Interpolate residuals
         res_sp = tir_sp_agg.subtract(tir_org_agg)
-        res_conv = res_sp.resample('bilinear').reproject(crs,transform)
+        res_conv = res_sp.resample('bilinear').reproject(crs, transform)
 
         # Add interpolated residual back to sharpened image
         tir_sp_ec = tir_sp_final.subtract(res_conv)
