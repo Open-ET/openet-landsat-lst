@@ -107,6 +107,7 @@ def main(ini_path=None, overwrite_flag=False,
     clip_ocean_flag = True
 
     # Read config file
+    logging.info(f'  {os.path.basename(ini_path)}')
     ini = configparser.ConfigParser(interpolation=None)
     ini.read_file(open(ini_path, 'r'))
 
