@@ -19,9 +19,10 @@ dist/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# PyCharm project settings
+# PyCharm
 .idea
 
-*.json
-openet/.DS_Store
+# MacOS
 .DS_Store
+
+*.json

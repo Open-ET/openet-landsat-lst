@@ -11,7 +11,6 @@ import re
 import time
 
 import ee
-from google.cloud import datastore
 
 import openet.sharpen
 import openet.core
@@ -21,9 +20,12 @@ import openet.sims as model
 # import openet.disalexi as model
 
 TOOL_NAME = 'tir_image_wrs2_export'
-TOOL_VERSION = '0.2.1'
+# TOOL_NAME = os.path.basename(__file__)
+TOOL_VERSION = '0.3.0'
 
+logging.getLogger("earthengine-api").setLevel(logging.INFO)
 logging.getLogger("googleapiclient").setLevel(logging.INFO)
+logging.getLogger('requests').setLevel(logging.INFO)
 logging.getLogger("urllib3").setLevel(logging.INFO)
 
 
@@ -221,11 +223,16 @@ def main(ini_path=None, overwrite_flag=False,
         raise e
 
     try:
-        output_type = str(ini['EXPORT']['output_type'])
+        if 'data_type' in ini['EXPORT'].keys():
+            output_dtype = str(ini['EXPORT']['data_type'])
+        elif 'output_type' in ini['EXPORT'].keys():
+            output_dtype = str(ini['EXPORT']['output_type'])
+        else:
+            raise KeyError
     except KeyError:
-        output_type = 'float'
-        # output_type = 'int16'
-        logging.debug(f'  output_type: not set in INI, defaulting to {output_type}')
+        output_dtype = 'float'
+        # output_dtype = 'int16'
+        logging.debug(f'  data_type: not set in INI, defaulting to {output_dtype}')
     except Exception as e:
         raise e
 
@@ -245,6 +252,63 @@ def main(ini_path=None, overwrite_flag=False,
         logging.debug('  export_id_name: not set in INI, defaulting to ""')
     except Exception as e:
         raise e
+
+    try:
+        destination = str(ini['EXPORT']['destination']).upper()
+    except KeyError:
+        destination = 'ASSET'
+        # destination = 'BUCKET'
+        logging.debug(f'  destination: not set in INI, defaulting to {destination}')
+    except Exception as e:
+        raise e
+
+    if destination == 'ASSET':
+        properties_json_flag = False
+        bucket_project_id = None
+        bucket_name = None
+    elif destination == 'BUCKET':
+        try:
+            # TODO: Write code to parse other boolean values
+            #   but for now if the flag is not exactly "True", set to False
+            properties_json_flag = ini['EXPORT']['properties_json_flag'].strip().capitalize()
+            properties_json_flag = True if properties_json_flag in ['True'] else False
+        except KeyError:
+            properties_json_flag = True
+            logging.debug(f'  properties_json_flag: not set in INI, defaulting to '
+                          f'{properties_json_flag}')
+        except Exception as e:
+            raise e
+
+        try:
+            bucket_project_id = str(ini['EXPORT']['bucket_project_id'])
+        except KeyError:
+            raise ValueError('"project_id" parameter must be set for COG exports')
+        except Exception as e:
+            raise e
+
+        try:
+            bucket_name = str(ini['EXPORT']['bucket_name'])
+        except KeyError:
+            raise ValueError('"bucket_name" parameter must be set for COG exports')
+        except Exception as e:
+            raise e
+
+        # try:
+        #     export_bucket_name = str(ini['EXPORT']['export_bucket'])
+        # except KeyError:
+        #     raise ValueError('"export_bucket" parameter must be set for COG exports')
+        # except Exception as e:
+        #     raise e
+        #
+        # try:
+        #     asset_bucket_name = str(ini['EXPORT']['assets_bucket'])
+        # except KeyError:
+        #     raise ValueError('"assets_bucket" parameter must be set for COG exports')
+        # except Exception as e:
+        #     raise e
+    # elif destination == 'GDRIVE':
+    else:
+        raise ValueError(f'Unsupported EXPORT "destination" parameter: {destination}')
 
 
     # If the user set the tiles argument, use these instead of the INI values
@@ -305,6 +369,7 @@ def main(ini_path=None, overwrite_flag=False,
         #   and use the defult credentials (should be the SA credentials)
         logging.debug('\nInitializing task datastore client')
         try:
+            from google.cloud import datastore
             datastore_client = datastore.Client(project='openet-dri')
         except Exception as e:
             logging.info('  Task logging disabled, error setting up datastore client')
@@ -324,7 +389,8 @@ def main(ini_path=None, overwrite_flag=False,
         logging.debug(f'\nInitializing GEE using application default credentials')
         import google.auth
         credentials, project_id = google.auth.default(
-            default_scopes=['https://www.googleapis.com/auth/earthengine'])
+            default_scopes=['https://www.googleapis.com/auth/earthengine']
+        )
         ee.Initialize(credentials)
     # elif 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
     #     logging.info(f'\nInitializing GEE using GOOGLE_APPLICATION_CREDENTIALS key')
@@ -343,7 +409,7 @@ def main(ini_path=None, overwrite_flag=False,
     # Build output collection and folder if necessary
     logging.debug(f'\nExport Collection: {scene_coll_id}')
     if not ee.data.getInfo(scene_coll_id.rsplit('/', 1)[0]):
-        logging.debug(f'\nFolder does not exist and will be built'
+        logging.info(f'\nFolder does not exist and will be built'
                       f'\n  {scene_coll_id.rsplit("/", 1)[0]}')
         input('Press ENTER to continue')
         ee.data.createAsset({'type': 'FOLDER'},
@@ -369,11 +435,53 @@ def main(ini_path=None, overwrite_flag=False,
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             utils.print_ee_tasks(tasks)
             input('ENTER')
-        ready_task_count = sum(1 for t in tasks.values() if t['state'] == 'READY')
-        # ready_task_count = len(tasks.keys())
+        running_task_count = sum([1 for v in tasks.values() if v['state'] == 'RUNNING'])
+        ready_task_count = sum([1 for v in tasks.values() if v['state'] == 'READY'])
+        logging.info(f'  Running Tasks: {running_task_count}')
+        logging.info(f'  Ready Tasks:   {ready_task_count}')
+
         # Hold the job here if the ready task count is already over the max
         ready_task_count = delay_task(
-            delay_time=0, task_max=ready_task_max, task_count=ready_task_count)
+            delay_time=0, task_max=ready_task_max, task_count=ready_task_count
+        )
+
+
+    # Get list of existing bucket files
+    # The export and asset bucket can be different when writing OpenET
+    #   assets to the "openet_assets_unmasked" bucket since these are moved to
+    #   "openet_assets" by a cloud function that is setting the nodata value
+    if destination == 'BUCKET':
+        logging.info(f'\nChecking bucket files')
+        from google.cloud import storage
+        storage_client = storage.Client(bucket_project_id)
+        # CGM - Is there a difference between .bucket() and .get_bucket()?
+        bucket = storage_client.get_bucket(bucket_name)
+        # bucket = storage_client.bucket(bucket_name)
+        # export_bucket = storage_client.get_bucket(export_bucket_name)
+        # asset_bucket = storage_client.get_bucket(asset_bucket_name)
+        # TODO: Add a check to make sure the bucket folder looks like
+        #   model/landsat/c02, or maybe just starts with the model?
+        # TODO: May need to support numbers & hyphens in the project name
+        # projects/earthengine-legacy/assets/projects/openet/geesebal/landsat/c02
+        # projects/openet/geesebal/landsat/c02
+        # projects/openet/assets/geesebal/landsat/c02
+        bucket_folder = re.sub(
+            'projects/[a-zA-Z_]+/(assets/)?', '',
+            scene_coll_id.replace('projects/earthengine-legacy/assets/', '')
+        )
+        logging.debug(f'  {bucket_folder}')
+        # TODO: Add filtering or iterate by year to keep these lists from getting to big
+        bucket_files = {x.name for x in bucket.list_blobs(prefix=bucket_folder)}
+        # bucket_export_files = {
+        #     x.name for x in export_bucket.list_blobs(prefix=bucket_folder)
+        # }
+        # bucket_asset_files = {
+        #     x.name for x in asset_bucket.list_blobs(prefix=bucket_folder)
+        # }
+    else:
+        bucket = None
+        bucket_folder = None
+        bucket_files = {}
 
 
     # Get list of MGRS tiles/zones that intersect the study area
@@ -445,7 +553,8 @@ def main(ini_path=None, overwrite_flag=False,
                 year_image_id_list = utils.get_info(
                     ee.List(model_obj.overpass(variables=['ndvi'])
                             .aggregate_array('image_id')),
-                    max_retries=10)
+                    max_retries=10
+                )
 
             # Filter to the wrs2_tile list
             # The WRS2 tile filtering should be done in the Collection call above,
@@ -472,7 +581,8 @@ def main(ini_path=None, overwrite_flag=False,
                 .filterBounds(tile_geom)
             year_asset_props = {
                 f'{scene_coll_id}/{x["properties"]["system:index"]}': x['properties']
-                for x in utils.get_info(asset_coll)['features']}
+                for x in utils.get_info(asset_coll)['features']
+            }
             asset_props.update(year_asset_props)
 
         if not export_image_id_list:
@@ -486,7 +596,8 @@ def main(ini_path=None, overwrite_flag=False,
         image_id_lists = defaultdict(list)
         for image_id in export_image_id_list:
             wrs2_tile = 'p{}r{}'.format(
-                *wrs2_tile_re.findall(image_id.split('/')[-1].split('_')[1])[0])
+                *wrs2_tile_re.findall(image_id.split('/')[-1].split('_')[1])[0]
+            )
             if wrs2_tile not in tile_list:
                 continue
             image_id_lists[wrs2_tile].append(image_id)
@@ -605,10 +716,16 @@ def main(ini_path=None, overwrite_flag=False,
 
                 export_id = export_id_fmt.format(
                     model=ini['INPUTS']['et_model'].lower(),
-                    index=image_id.lower().replace('/', '_'))
+                    index=image_id.lower().replace('/', '_')
+                )
                 export_id = export_id.replace('-', '')
                 export_id += export_id_name
                 asset_id = f'{scene_coll_id}/{scene_id.lower()}'
+
+                bucket_img = f'{bucket_folder}/{scene_id.lower()}.tif'
+                bucket_json = f'{bucket_folder}/{scene_id.lower()}_properties.json'
+                # logging.debug(f'  Bucket path:   {bucket_img}')
+                # logging.debug(f'  Properties JSON: {bucket_json}')
 
                 if update_flag:
                     if export_id in tasks.keys():
@@ -617,8 +734,7 @@ def main(ini_path=None, overwrite_flag=False,
                     elif asset_props and asset_id in asset_props.keys():
                         # In update mode only overwrite if the version is old
                         model_ver = version_number(openet.sharpen.__version__)
-                        asset_ver = version_number(
-                            asset_props[asset_id]['model_version'])
+                        asset_ver = version_number(asset_props[asset_id]['model_version'])
                         # asset_flt = [
                         #     t == 'float' for b, t in asset_types.items()
                         #     if b in ['et', 'et_reference']]
@@ -628,7 +744,13 @@ def main(ini_path=None, overwrite_flag=False,
                             logging.debug(f'  asset: {asset_ver}\n'
                                           f'  model: {model_ver}')
                             try:
-                                ee.data.deleteAsset(asset_id)
+                                # CGM - For all of these we are assuming that COG backed assets
+                                #   will only be written to collections of COG backed assets
+                                #   and native assets to native asset image collections
+                                if destination == 'BUCKET':
+                                    delete_cog_asset(asset_id, bucket, bucket_img, bucket_json)
+                                else:
+                                    ee.data.deleteAsset(asset_id)
                             except:
                                 logging.info(f'  {scene_id} - Error removing asset, skipping')
                                 continue
@@ -640,7 +762,10 @@ def main(ini_path=None, overwrite_flag=False,
                                 '  Existing asset is from realtime Landsat '
                                 'collection, removing')
                             try:
-                                ee.data.deleteAsset(asset_id)
+                                if destination == 'BUCKET':
+                                    delete_cog_asset(asset_id, bucket, bucket_img, bucket_json)
+                                else:
+                                    ee.data.deleteAsset(asset_id)
                             except:
                                 logging.info(f'  {scene_id} - Error removing asset, skipping')
                                 continue
@@ -659,7 +784,6 @@ def main(ini_path=None, overwrite_flag=False,
                         # elif 'tool_version' not in asset_props[asset_id].keys():
                         #     logging.info('  TOOL_VERSION property was not set, removing')
                         #     ee.data.deleteAsset(asset_id)
-
                         # elif asset_props[asset_id]['images'] == '':
                         #     logging.info('  Images property was not set, removing')
                         #     input('ENTER')
@@ -676,13 +800,21 @@ def main(ini_path=None, overwrite_flag=False,
                     # cancelled and an existing image/file/asset can be removed
                     if asset_props and asset_id in asset_props.keys():
                         logging.info(f'  {scene_id} - Asset already exists, removing')
-                        ee.data.deleteAsset(asset_id)
+                        if destination == 'BUCKET':
+                            delete_cog_asset(asset_id, bucket, bucket_img, bucket_json)
+                        else:
+                            ee.data.deleteAsset(asset_id)
                 else:
                     if export_id in tasks.keys():
                         logging.debug(f'  {scene_id} - Task already submitted, skipping')
                         continue
                     elif asset_props and asset_id in asset_props.keys():
                         logging.debug(f'  {scene_id} - Asset already exists, skipping')
+                        continue
+                    # CGM - We probably don't need the extra check on bucket_files
+                    elif destination == 'BUCKET' and bucket_files and bucket_img in bucket_files:
+                        # if overwrite_flag:
+                        logging.debug(f'  {scene_id} - Image is already in bucket, skipping')
                         continue
 
                 logging.debug(f'  Source: {image_id}')
@@ -697,59 +829,51 @@ def main(ini_path=None, overwrite_flag=False,
                 #   the same for each wrs2 tile
                 output_info = utils.get_info(ee.Image(image_id).select([2]))
                 transform = '[{}]'.format(
-                    ','.join(map(str, output_info['bands'][0]['crs_transform'])))
+                    ','.join(map(str, output_info['bands'][0]['crs_transform']))
+                )
 
                 # Generate sharpened thermal image
                 output_img = openet.sharpen.Landsat(image_id).thermal()\
                     .select(['tir_sharpened'], ['tir'])
 
-                # # DEADBEEF - Old code that prepped the image for sharpen.thermal
-                # # TODO: Module should handle the band renaming and scaling
-                # # Copied from PTJPL Image.from_landsat_c1_sr()
-                # landsat_img = ee.Image(image_id)
-                # input_bands = ee.Dictionary({
-                #     'LANDSAT_5': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-                #     'LANDSAT_7': ['B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'pixel_qa'],
-                #     'LANDSAT_8': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'pixel_qa']})
-                # output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir',
-                #                 'pixel_qa']
-                # spacecraft_id = ee.String(landsat_img.get('SATELLITE'))
-                # prep_img = landsat_img \
-                #     .select(input_bands.get(spacecraft_id), output_bands) \
-                #     .multiply([0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.1, 1]) \
-                #     .set({'system:index': landsat_img.get('system:index'),
-                #           'system:time_start': landsat_img.get('system:time_start'),
-                #           'system:id': landsat_img.get('system:id'),
-                #           'SATELLITE': spacecraft_id,
-                #          })
-                #
-                # # Compute the sharpened thermal image
-                # output_img = openet.sharpen.thermal.landsat(prep_img) \
-                #     .select(['tir_sharpened'], ['tir'])
+
+                # # TODO: Check if model_img_with_metadata is needed?
+                # #   This was in the scene export tool
+                # # Keep a reference to the original image for copying properties
+                # model_img_with_metadata = output_img
+                # if destination == 'BUCKET' and properties_json_flag:
+                #     # Need to get the source image properties, but calling getInfo
+                #     #   on the output image might be really slow
+                #     # TODO: Check if this is working for the more complex models
+                #     src_info = utils.get_info(model_img_with_metadata)
+                #     if not src_info:
+                #         logging.info(f'  {scene_id} - Could not get image properties, skipping')
+                #         continue
 
 
                 # CGM - We will need to think this through a little bit more
                 #   Should any scale factor be allowed?  Do we need the clamping?
                 #   Should/could we support separate scale factors for each band?
+                nodata = -9999
                 if scale_factor > 1:
-                    if output_type == 'int16':
+                    if output_dtype == 'int16':
                         output_img = output_img.multiply(scale_factor).round()\
                             .clamp(-32768, 32767).int16()
-                    elif output_type == 'uint16':
+                    elif output_dtype == 'uint16':
                         output_img = output_img.multiply(scale_factor).round()\
-                            .clamp(0, 65536).uint16()
-                    elif output_type == 'int8':
-                        output_img = output_img.multiply(scale_factor).round()\
-                            .clamp(-128, 127).int8()
-                    elif output_type == 'uint8':
-                        output_img = output_img.multiply(scale_factor).round()\
-                            .clamp(0, 255).uint8()
+                            .clamp(0, 65534).uint16()
+                        nodata = 65535
+                    # elif output_type == 'int8':
+                    #     output_img = output_img.multiply(scale_factor).round()\
+                    #         .clamp(-128, 127).int8()
+                    # elif output_type == 'uint8':
+                    #     output_img = output_img.multiply(scale_factor).round()\
+                    #         .clamp(0, 255).uint8()
                     else:
                         output_img = output_img.multiply(scale_factor)
 
                 if clip_ocean_flag:
-                    output_img = output_img\
-                        .updateMask(ee.Image('projects/openet/ocean_mask'))
+                    output_img = output_img.updateMask(ee.Image('projects/openet/ocean_mask'))
 
                 properties = {
                     # Custom properties
@@ -761,13 +885,6 @@ def main(ini_path=None, overwrite_flag=False,
                     'model_version': openet.sharpen.__version__,
                     'scale_factor': 1.0 / scale_factor,
                     'scene_id': scene_id,
-                    # CGM - Is this separate property still needed?
-                    # Having it named separately from model_version might make
-                    #   it easier to pass through to other models/calculations
-                    'sharpen_version': openet.sharpen.__version__,
-                    # CGM - Tracking the SIMS version since it was used to build
-                    #   the image collection
-                    'sims_version': model.__version__,
                     'tool_name': TOOL_NAME,
                     'tool_version': TOOL_VERSION,
                     'wrs2_path': p,
@@ -778,11 +895,35 @@ def main(ini_path=None, overwrite_flag=False,
                     'CLOUD_COVER_LAND': output_info['properties']['CLOUD_COVER_LAND'],
                     'system:time_start': output_info['properties']['system:time_start'],
                 }
+
+                # CGM - Is this separate property still needed?
+                # Having it named separately from model_version might make
+                #   it easier to pass through to other models/calculations
+                properties['sharpen_version'] = openet.sharpen.__version__
+
+                # CGM - Tracking the OpenET MODEL version used to build the scene lists
+                properties[f'{model.MODEL_NAME.lower()}_version'] = model.__version__
+                # properties['sims_version'] = model.__version__
+
                 output_img = output_img.set(properties)
 
                 # Copy metadata properties from original output_img
                 # Explicit casting since copyProperties returns an element obj
                 # output_img = ee.Image(output_img.copyProperties(landsat_img))
+
+
+                if destination == 'BUCKET' and 'int' in output_dtype.lower():
+                    # CGM - This is needed to get around the bug with integer exports
+                    #   where masked pixels are set to 0
+                    # Unmasking the image (commented out below) can sometimes create
+                    #   a border around the image of 0 pixels even though it works
+                    #   correctly when exporting a single Landsat image band
+                    nodata_mask = output_img.mask().lte(0)
+                    output_img = nodata_mask.multiply(nodata) \
+                        .where(nodata_mask.eq(0), output_img) \
+                        .rename(output_img.bandNames())
+                    # output_img = output_img.unmask(nodata)
+
 
                 # CGM - Why am I not using the utils.ee_task_start()?
                 # Build export tasks
@@ -790,16 +931,31 @@ def main(ini_path=None, overwrite_flag=False,
                 task = None
                 for i in range(1, max_retries):
                     try:
-                        task = ee.batch.Export.image.toAsset(
-                            output_img,
-                            description=export_id,
-                            assetId=asset_id,
-                            dimensions=output_info['bands'][0]['dimensions'],
-                            crs=output_info['bands'][0]['crs'],
-                            crsTransform=transform,
-                            maxPixels=int(1E10),
-                            # pyramidingPolicy='mean',
-                        )
+                        if destination == 'ASSET':
+                            task = ee.batch.Export.image.toAsset(
+                                output_img,
+                                description=export_id,
+                                assetId=asset_id,
+                                dimensions=output_info['bands'][0]['dimensions'],
+                                crs=output_info['bands'][0]['crs'],
+                                crsTransform=transform,
+                                maxPixels=int(1E10),
+                                # pyramidingPolicy='mean',
+                            )
+                        elif destination == 'BUCKET':
+                            task = ee.batch.Export.image.toCloudStorage(
+                                image=output_img,
+                                description=export_id,
+                                bucket=bucket_name,
+                                fileNamePrefix=bucket_img.replace('.tif', ''),
+                                dimensions=output_info['bands'][0]['dimensions'],
+                                crs=output_info['bands'][0]['crs'],
+                                crsTransform=transform,
+                                maxPixels=int(1E10),
+                                fileFormat='GeoTIFF',
+                                formatOptions={'cloudOptimized': True, 'noData': nodata},
+                                # pyramidingPolicy='mean',
+                            )
                     # except ee.ee_exception.EEException as e:
                     except Exception as e:
                         if ('Earth Engine memory capacity exceeded' in str(e) or
@@ -828,13 +984,45 @@ def main(ini_path=None, overwrite_flag=False,
                 # # Not using ee_task_start since it doesn't return the task object
                 # utils.ee_task_start(task)
 
+
+                # Don't write the properties JSON until after the task has started
+                if destination == 'BUCKET' and properties_json_flag:
+                    # CGM - Should we check if the json is already in the bucket?
+                    # We already checked if the asset exists so at this point it seems
+                    #   better to always overwrite the json properties file
+                    # if bucket_json not in bucket_files:
+
+                    logging.debug(f'  {scene_id} - Writing properties JSON to bucket')
+                    blob = bucket.blob(bucket_json)
+
+                    # # First remove the system index and time_start from the source properties
+                    # for k in ['system:index', 'system:time_start']:
+                    #     if k in src_info['properties']:
+                    #         del src_info['properties'][k]
+                    #
+                    # # Then add any missing source properties to the properties dictionary
+                    # for k, v in src_info['properties'].items():
+                    #     if k not in properties:
+                    #         properties[k] = v
+
+                    max_retries = 4
+                    for i in range(1, max_retries):
+                        try:
+                            blob.upload_from_string(json.dumps(properties))
+                        except Exception as e:
+                            logging.info(f'  JSON properties file not written ({i}/{max_retries})')
+                            logging.debug(f'  {e}')
+                            time.sleep(i ** 3)
+
+
                 # Write the export task info the openet-dri project datastore
                 if log_tasks:
                     # logging.debug('  Writing datastore entity')
                     try:
                         task_obj = datastore.Entity(key=datastore_client.key(
                             'Task', task.status()['id']),
-                            exclude_from_indexes=['properties'])
+                            exclude_from_indexes=['properties']
+                        )
                         for k, v in task.status().items():
                             task_obj[k] = v
                         # task_obj['date'] = datetime.datetime.today() \
@@ -1104,8 +1292,27 @@ def delay_task(delay_time=0, task_max=-1, task_count=0):
     return ready_task_count
 
 
+# TODO: Move to openet-core utils.py
 def version_number(version_str):
     return list(map(int, version_str.split('.')))
+
+
+# TODO: Move to openet-core utils.py
+# TODO: Should we pass in the bucket file list instead of checking .exists()
+#   or maybe only check .exists() if the bucket_file list is not set?
+def delete_cog_asset(asset_id, bucket, bucket_img, bucket_json=None):
+    # Always remove the EE asset before deleting the bucket files
+    ee.data.deleteAsset(asset_id)
+
+    img_blob = bucket.blob(bucket_img)
+    if img_blob.exists():
+        img_blob.delete()
+
+    if bucket_json is None:
+        bucket_json = bucket_img.replace('.tif', '_properties.json')
+    json_blob = bucket.blob(bucket_json)
+    if json_blob.exists():
+        json_blob.delete()
 
 
 def arg_parse():
