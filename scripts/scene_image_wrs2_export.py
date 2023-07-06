@@ -87,19 +87,19 @@ def main(ini_path=None, overwrite_flag=False,
     # List of path/rows to skip
     wrs2_skip_list = [
         'p049r026',  # Vancouver Island, Canada
-        # 'p047r031', # North California coast
+        # 'p047r031',  # North California coast
         'p042r037',  # San Nicholas Island, California
-        # 'p041r037', # South California coast
-        'p040r038', 'p039r038', 'p038r038', # Mexico (by California)
-        'p037r039', 'p036r039', 'p035r039', # Mexico (by Arizona)
-        'p034r039', 'p033r039', # Mexico (by New Mexico)
+        # 'p041r037',  # South California coast
+        'p040r038', 'p039r038', 'p038r038',  # Mexico (by California)
+        'p037r039', 'p036r039', 'p035r039',  # Mexico (by Arizona)
+        'p034r039', 'p033r039',  # Mexico (by New Mexico)
         'p032r040',  # Mexico (West Texas)
         'p029r041', 'p028r042', 'p027r043', 'p026r043',  # Mexico (South Texas)
-        'p019r040', 'p018r040', # West Florida coast
-        'p016r043', 'p015r043', # South Florida coast
-        'p014r041', 'p014r042', 'p014r043', # East Florida coast
-        'p013r035', 'p013r036', # North Carolina Outer Banks
-        'p013r026', 'p012r026', # Canada (by Maine)
+        'p019r040', 'p018r040',  # West Florida coast
+        'p016r043', 'p015r043',  # South Florida coast
+        'p014r041', 'p014r042', 'p014r043',  # East Florida coast
+        'p013r035', 'p013r036',  # North Carolina Outer Banks
+        'p013r026', 'p012r026',  # Canada (by Maine)
         'p011r032', # Rhode Island coast
     ]
     wrs2_path_skip_list = [9, 49]
@@ -451,10 +451,11 @@ def main(ini_path=None, overwrite_flag=False,
         )
 
 
-    # Get list of existing bucket files
-    # The export and asset bucket can be different when writing OpenET
-    #   assets to the "openet_assets_unmasked" bucket since these are moved to
-    #   "openet_assets" by a cloud function that is setting the nodata value
+    # Check the storage bucket
+    # CGM - We don't really need to connect to the bucket here
+    #   but it maybe useful for checking that the bucket exists
+    bucket = None
+    bucket_folder = None
     if destination == 'BUCKET':
         logging.info(f'\nChecking bucket files')
         from google.cloud import storage
@@ -462,31 +463,19 @@ def main(ini_path=None, overwrite_flag=False,
         # CGM - Is there a difference between .bucket() and .get_bucket()?
         bucket = storage_client.get_bucket(bucket_name)
         # bucket = storage_client.bucket(bucket_name)
-        # export_bucket = storage_client.get_bucket(export_bucket_name)
-        # asset_bucket = storage_client.get_bucket(asset_bucket_name)
         # TODO: Add a check to make sure the bucket folder looks like
         #   model/landsat/c02, or maybe just starts with the model?
-        # TODO: May need to support numbers & hyphens in the project name
-        # projects/earthengine-legacy/assets/projects/openet/geesebal/landsat/c02
-        # projects/openet/geesebal/landsat/c02
-        # projects/openet/assets/geesebal/landsat/c02
+        #   May need to support numbers & hyphens in the project name
+        #   projects/earthengine-legacy/assets/projects/openet/geesebal/landsat/c02
+        #   projects/openet/geesebal/landsat/c02
+        #   projects/openet/assets/geesebal/landsat/c02
         bucket_folder = re.sub(
             'projects/[a-zA-Z_]+/(assets/)?', '',
             scene_coll_id.replace('projects/earthengine-legacy/assets/', '')
         )
         logging.debug(f'  {bucket_folder}')
-        # TODO: Add filtering or iterate by year to keep these lists from getting to big
-        bucket_files = {x.name for x in bucket.list_blobs(prefix=bucket_folder)}
-        # bucket_export_files = {
-        #     x.name for x in export_bucket.list_blobs(prefix=bucket_folder)
-        # }
-        # bucket_asset_files = {
-        #     x.name for x in asset_bucket.list_blobs(prefix=bucket_folder)
-        # }
-    else:
-        bucket = None
-        bucket_folder = None
-        bucket_files = {}
+        # # CGM - Not checking bucket files any more
+        # bucket_files = {x.name for x in bucket.list_blobs(prefix=bucket_folder)}
 
 
     # Get list of MGRS tiles/zones that intersect the study area
@@ -549,17 +538,27 @@ def main(ini_path=None, overwrite_flag=False,
                 # model_args={},
                 # filter_args=filter_args,
             )
-            try:
-                year_image_id_list = model_obj.get_image_ids()
-            except Exception as e:
-                # Get the image ID list from an NDVI collection if get_image_ids()
-                #   doesn't work
-                logging.info('  Could not get image IDs from collection method')
-                year_image_id_list = utils.get_info(
-                    ee.List(model_obj.overpass(variables=['ndvi'])
-                            .aggregate_array('image_id')),
-                    max_retries=10
-                )
+
+            year_image_id_list = []
+            for i in range(1, 4):
+                try:
+                    year_image_id_list = model_obj.get_image_ids()
+                    break
+                except Exception as e:
+                    logging.info('  Error requesting image IDs from collection, retrying')
+                    time.sleep(i ** 3)
+                    continue
+                    # # Get the image ID list from an NDVI collection if get_image_ids()
+                    # #   doesn't work
+                    # logging.info('  Could not get image IDs from collection method')
+                    # year_image_id_list = utils.get_info(
+                    #     ee.List(model_obj.overpass(variables=['ndvi'])
+                    #             .aggregate_array('image_id')),
+                    #     max_retries=10
+                    # )
+            if not year_image_id_list:
+                logging.info('  Empty year image ID list, skipping')
+                continue
 
             # Filter to the wrs2_tile list
             # The WRS2 tile filtering should be done in the Collection call above,
@@ -710,6 +709,26 @@ def main(ini_path=None, overwrite_flag=False,
             # # input('ENTER')
 
 
+            # # CGM - Commenting out since checking the bucket files isn't really
+            # #   necessary now that the nodata value can be set correctly
+            # # Get list of existing bucket files
+            # bucket_files = set()
+            # if destination == 'BUCKET':
+            #     logging.debug(f'  Checking bucket files')
+            #     # CGM - This is a quick hack to try and break up the filtering a little
+            #     #   I thought about just iterating on collections but I wasn't sure that
+            #     #   would work if we ever added other sensors or the realtime collections
+            #     # This works for now since I know that this tool operates on scenes and
+            #     #   there are only images with this format in the model/landsat/c02 folders
+            #     for landsat in ['lt05', 'le07', 'lc08', 'lc09']:
+            #         if landsat.upper() not in ','.join(collections):
+            #             continue
+            #         bucket_prefix = f'{bucket_folder}/{landsat}_{path:03d}{row:03d}'
+            #         logging.debug(f'    {bucket_prefix}')
+            #         landsat_files = {x.name for x in bucket.list_blobs(prefix=bucket_prefix)}
+            #         bucket_files.update(landsat_files)
+
+
             # Process each image in the collection by date
             # image_id is the full Earth Engine ID to the asset
             for image_id in image_id_list:
@@ -726,6 +745,9 @@ def main(ini_path=None, overwrite_flag=False,
                 )
                 export_id = export_id.replace('-', '')
                 export_id += export_id_name
+                if destination == 'BUCKET':
+                    export_id += '_cog'
+
                 asset_id = f'{scene_coll_id}/{scene_id.lower()}'
 
                 bucket_img = f'{bucket_folder}/{scene_id.lower()}.tif'
@@ -817,11 +839,13 @@ def main(ini_path=None, overwrite_flag=False,
                     elif asset_props and asset_id in asset_props.keys():
                         logging.debug(f'  {scene_id} - Asset already exists, skipping')
                         continue
-                    # CGM - We probably don't need the extra check on bucket_files
-                    elif destination == 'BUCKET' and bucket_files and bucket_img in bucket_files:
-                        # if overwrite_flag:
-                        logging.debug(f'  {scene_id} - Image is already in bucket, skipping')
-                        continue
+                    # # CGM - Commenting out since checking the bucket files isn't really
+                    # #   necessary now that the nodata value can be set correctly
+                    # # CGM - We probably don't need the extra check on bucket_files
+                    # elif destination == 'BUCKET' and bucket_files and bucket_img in bucket_files:
+                    #     # if overwrite_flag:
+                    #     logging.debug(f'  {scene_id} - Image is already in bucket, skipping')
+                    #     continue
 
                 logging.debug(f'  Source: {image_id}')
                 # logging.debug(f'  Date: {image_date}')
@@ -1180,7 +1204,8 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
     # Only return export tiles that have intersecting WRS2 tiles
     export_list = [
         tile for tile in sorted(tiles_list, key=lambda k: k['index'])
-        if tile['wrs2_tiles']]
+        if tile['wrs2_tiles']
+    ]
 
     return export_list
 
