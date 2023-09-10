@@ -2,7 +2,7 @@ import argparse
 from builtins import input
 from collections import defaultdict
 import configparser
-import datetime
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
@@ -26,12 +26,12 @@ import openet.ssebop as model
 
 TOOL_NAME = 'tir_image_wrs2_export'
 # TOOL_NAME = os.path.basename(__file__)
-TOOL_VERSION = '0.3.0'
+TOOL_VERSION = '0.3.1'
 
-logging.getLogger("earthengine-api").setLevel(logging.INFO)
-logging.getLogger("googleapiclient").setLevel(logging.INFO)
+logging.getLogger('earthengine-api').setLevel(logging.INFO)
+logging.getLogger('googleapiclient').setLevel(logging.INFO)
 logging.getLogger('requests').setLevel(logging.INFO)
-logging.getLogger("urllib3").setLevel(logging.INFO)
+logging.getLogger('urllib3').setLevel(logging.INFO)
 
 
 def main(ini_path=None, overwrite_flag=False,
@@ -90,7 +90,7 @@ def main(ini_path=None, overwrite_flag=False,
         # 'p047r031',  # North California coast
         'p042r037',  # San Nicholas Island, California
         # 'p041r037',  # South California coast
-        'p040r038', 'p039r038', 'p038r038',  # Mexico (by California)
+        # 'p040r038', 'p039r038', 'p038r038',  # Mexico (by California)
         'p037r039', 'p036r039', 'p035r039',  # Mexico (by Arizona)
         'p034r039', 'p033r039',  # Mexico (by New Mexico)
         'p032r040',  # Mexico (West Texas)
@@ -327,7 +327,7 @@ def main(ini_path=None, overwrite_flag=False,
         utm_zones = sorted(list(set([int(x[:2]) for x in mgrs_tiles])))
         logging.info(f'  utm_zones:  {", ".join(map(str, utm_zones))}')
 
-    today_dt = datetime.datetime.now()
+    today_dt = datetime.now()
     today_dt = today_dt.replace(hour=0, minute=0, second=0, microsecond=0)
     if start_dt and end_dt:
         # Attempt to use the function start/end dates
@@ -342,16 +342,16 @@ def main(ini_path=None, overwrite_flag=False,
         # Assume that a single day value should actually be a range?
         if len(recent_days) == 1:
             recent_days = list(range(1, recent_days[0]))
-        end_dt = today_dt - datetime.timedelta(days=recent_days[0])
-        start_dt = today_dt - datetime.timedelta(days=recent_days[-1])
+        end_dt = today_dt - timedelta(days=recent_days[0])
+        start_dt = today_dt - timedelta(days=recent_days[-1])
         start_date = start_dt.strftime('%Y-%m-%d')
         end_date = end_dt.strftime('%Y-%m-%d')
     else:
         # Parse the INI start/end dates
         logging.info('\nINI date range')
         try:
-            start_dt = datetime.datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
         except Exception as e:
             raise e
     logging.info(f'  Start: {start_date}')
@@ -362,7 +362,7 @@ def main(ini_path=None, overwrite_flag=False,
         raise ValueError('end date can not be before start date')
 
     logging.debug('\nFilter date range')
-    filter_end_dt = end_dt + datetime.timedelta(days=1)
+    filter_end_dt = end_dt + timedelta(days=1)
     filter_end_date = filter_end_dt.strftime("%Y-%m-%d")
     logging.debug(f'  Start: {start_date}')
     logging.debug(f'  End:   {filter_end_date}')
@@ -457,7 +457,7 @@ def main(ini_path=None, overwrite_flag=False,
     bucket = None
     bucket_folder = None
     if destination == 'BUCKET':
-        logging.info(f'\nChecking bucket files')
+        logging.info(f'\nChecking bucket')
         from google.cloud import storage
         storage_client = storage.Client(bucket_project_id)
         # CGM - Is there a difference between .bucket() and .get_bucket()?
@@ -734,10 +734,11 @@ def main(ini_path=None, overwrite_flag=False,
             for image_id in image_id_list:
                 coll_id, scene_id = image_id.rsplit('/', 1)
                 l, p, r, year, month, day = parse_landsat_id(scene_id)
-                image_dt = datetime.datetime.strptime(
-                    '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d')
+                image_dt = datetime.strptime(
+                    '{:04d}{:02d}{:02d}'.format(year, month, day), '%Y%m%d'
+                )
                 image_date = image_dt.strftime('%Y-%m-%d')
-                # next_date = (image_dt + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+                # next_date = (image_dt + timedelta(days=1)).strftime('%Y-%m-%d')
 
                 export_id = export_id_fmt.format(
                     model=ini['INPUTS']['et_model'].lower(),
@@ -909,7 +910,7 @@ def main(ini_path=None, overwrite_flag=False,
                     # Custom properties
                     'coll_id': coll_id,
                     'core_version': openet.core.__version__,
-                    'date_ingested': datetime.datetime.today().strftime('%Y-%m-%d'),
+                    'date_ingested': datetime.today().strftime('%Y-%m-%d'),
                     'image_id': image_id,
                     'model_name': model_name,
                     'model_version': openet.sharpen.__version__,
@@ -1061,8 +1062,8 @@ def main(ini_path=None, overwrite_flag=False,
                         )
                         for k, v in task.status().items():
                             task_obj[k] = v
-                        # task_obj['date'] = datetime.datetime.today() \
-                        #     .strftime('%Y-%m-%d')
+                        # task_obj['date'] = datetime.today().strftime('%Y-%m-%d')
+                        task_obj['eecu_hours'] = 0
                         task_obj['index'] = properties.pop('wrs2_tile')
                         # task_obj['wrs2_tile'] = properties.pop('wrs2_tile')
                         task_obj['model_name'] = properties.pop('model_name')
@@ -1080,19 +1081,25 @@ def main(ini_path=None, overwrite_flag=False,
                 # Pause before starting the next export task
                 ready_task_count += 1
                 ready_task_count = delay_task(
-                    delay_time=delay_time, task_max=ready_task_max,
-                    task_count=ready_task_count
+                    delay_time=delay_time, task_max=ready_task_max, task_count=ready_task_count
                 )
 
                 logging.debug('')
 
 
-def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
-                      study_area_property=None, study_area_features=[],
-                      mgrs_tiles=[], mgrs_skip_list=[],
-                      utm_zones=[], wrs2_tiles=[],
-                      mgrs_property='mgrs', utm_property='utm',
-                      wrs2_property='wrs2'):
+def mgrs_export_tiles(
+        study_area_coll_id,
+        mgrs_coll_id,
+        study_area_property=None,
+        study_area_features=[],
+        mgrs_tiles=[],
+        mgrs_skip_list=[],
+        utm_zones=[],
+        wrs2_tiles=[],
+        mgrs_property='mgrs',
+        utm_property='utm',
+        wrs2_property='wrs2'
+        ):
     """Select MGRS tiles and metadata that intersect the study area geometry
 
     Parameters
@@ -1139,7 +1146,8 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
             'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME',
             'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ',
             'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD',
-            'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY']
+            'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY',
+        ]
     # elif (study_area_property == 'STUSPS' and
     #         'WESTERN11' in [x.upper() for x in study_area_features]):
     #     study_area_features = [
@@ -1151,7 +1159,8 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
         logging.debug(f'  Property: {study_area_property}')
         logging.debug(f'  Features: {",".join(study_area_features)}')
         study_area_coll = study_area_coll.filter(
-            ee.Filter.inList(study_area_property, study_area_features))
+            ee.Filter.inList(study_area_property, study_area_features)
+        )
 
     logging.debug('Building MGRS tile list')
     tiles_coll = ee.FeatureCollection(mgrs_coll_id) \
@@ -1164,14 +1173,16 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
     if mgrs_skip_list:
         logging.debug(f'  Filter MGRS skip list:    {mgrs_skip_list}')
         tiles_coll = tiles_coll.filter(
-            ee.Filter.inList(mgrs_property, mgrs_skip_list).Not())
+            ee.Filter.inList(mgrs_property, mgrs_skip_list).Not()
+        )
     if mgrs_tiles:
         logging.debug(f'  Filter MGRS tiles/zones:  {mgrs_tiles}')
         # Allow MGRS tiles to be subsets of the full tile code
         #   i.e. mgrs_tiles = 10TE, 10TF
         mgrs_filters = [
             ee.Filter.stringStartsWith(mgrs_property, mgrs_id.upper())
-            for mgrs_id in mgrs_tiles]
+            for mgrs_id in mgrs_tiles
+        ]
         tiles_coll = tiles_coll.filter(ee.call('Filter.or', mgrs_filters))
 
     def drop_geometry(ftr):
@@ -1198,8 +1209,7 @@ def mgrs_export_tiles(study_area_coll_id, mgrs_coll_id,
     if wrs2_tiles:
         logging.debug(f'  Filter WRS2 tiles: {wrs2_tiles}')
         for tile in tiles_list:
-            tile['wrs2_tiles'] = sorted(list(
-                set(tile['wrs2_tiles']) & set(wrs2_tiles)))
+            tile['wrs2_tiles'] = sorted(list(set(tile['wrs2_tiles']) & set(wrs2_tiles)))
 
     # Only return export tiles that have intersecting WRS2 tiles
     export_list = [
@@ -1227,15 +1237,15 @@ def date_range_by_year(start_dt, end_dt, exclusive_end_dates=False):
     """
     if (end_dt - start_dt).days > 366:
         for year in range(start_dt.year, end_dt.year+1):
-            year_start_dt = max(datetime.datetime(year, 1, 1), start_dt)
-            year_end_dt = datetime.datetime(year+1, 1, 1) - datetime.timedelta(days=1)
+            year_start_dt = max(datetime(year, 1, 1), start_dt)
+            year_end_dt = datetime(year+1, 1, 1) - timedelta(days=1)
             year_end_dt = min(year_end_dt, end_dt)
             if exclusive_end_dates:
-                year_end_dt = year_end_dt + datetime.timedelta(days=1)
+                year_end_dt = year_end_dt + timedelta(days=1)
             yield year_start_dt, year_end_dt
     else:
         if exclusive_end_dates:
-            year_end_dt = end_dt + datetime.timedelta(days=1)
+            year_end_dt = end_dt + timedelta(days=1)
         yield start_dt, year_end_dt
 
 
