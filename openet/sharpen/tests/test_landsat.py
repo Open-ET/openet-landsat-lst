@@ -35,7 +35,7 @@ def test_Landsat_C02_L2_band_names(image_id):
 def test_Landsat_C02_L2_properties():
     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
     output = openet.sharpen.Landsat_C02_L2(image_id=image_id).image.getInfo()
-    assert output['properties']['SATELLITE'] == 'LANDSAT_8'
+    assert output['properties']['SPACECRAFT_ID'] == 'LANDSAT_8'
 
 
 def test_Landsat_C02_L2_scaling():

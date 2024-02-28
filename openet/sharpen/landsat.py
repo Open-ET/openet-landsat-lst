@@ -67,7 +67,7 @@ class Landsat_C02_L2(Model):
             .add([-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 1])
             .set({'system:time_start': raw_image.get('system:time_start'),
                   'system:index': raw_image.get('system:index'),
-                  'SATELLITE': spacecraft_id,
+                  'SPACECRAFT_ID': spacecraft_id,
                   })
         )
 
