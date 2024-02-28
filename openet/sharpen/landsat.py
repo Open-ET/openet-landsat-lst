@@ -63,15 +63,17 @@ class Landsat_C02_SR(Model):
         # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(
         #     raw_image, **cloudmask_args)
 
-        input_image = raw_image \
-            .select(input_bands.get(spacecraft_id), output_bands)\
+        input_image = (
+            raw_image
+            .select(input_bands.get(spacecraft_id), output_bands)
             .multiply([0.0000275, 0.0000275, 0.0000275, 0.0000275,
-                       0.0000275, 0.0000275, 0.00341802, 1])\
-            .add([-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 1])\
+                       0.0000275, 0.0000275, 0.00341802, 1])
+            .add([-0.2, -0.2, -0.2, -0.2, -0.2, -0.2, 149.0, 1])
             .set({'system:time_start': raw_image.get('system:time_start'),
                   'system:index': raw_image.get('system:index'),
                   'SATELLITE': spacecraft_id,
                   })
+        )
 
         # CGM - super could be called without the init if we set input_image and
         #   spacecraft_id as properties of self
