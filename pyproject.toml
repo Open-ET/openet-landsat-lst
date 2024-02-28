@@ -1,0 +1,42 @@
+[project]
+name = "openet-sharpen"
+version = "0.2.0"
+authors = [
+    { name = "Yanghui Kang", email = "ykang38@wisc.edu" },
+    { name = "Yun Yang", email = "yun.yang@msstate.edu" },
+]
+maintainers = [
+    { name = "Charles Morton", email = "charles.morton@dri.edu" },
+]
+description = "Earth Engine based Landsat thermal band sharpening functions"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["LST", "TIR", "Landsat", "OpenET", "Earth Engine", "Evapotranspiration"]
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "earthengine-api>=0.1.367",
+    # "openet-core>=0.2.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Open-ET/openet-sharpen"
+# "Repository" = "https://github.com/Open-ET/openet-sharpen.git"
+# "Documentation" = "https://github.com/Open-ET/openet-sharpen"
+# "Bug Tracker" = "https://github.com/Open-ET/openet-sharpen"
+# "Changelog" = "https://github.com/Open-ET/openet-sharpen"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["openet*"]
+exclude = ["examples*", "scripts*"]
