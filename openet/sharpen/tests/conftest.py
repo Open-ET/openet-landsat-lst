@@ -22,6 +22,3 @@ def test_init():
         ee.Initialize(ee.ServiceAccountCredentials('test', key_file=EE_KEY_FILE))
     else:
         ee.Initialize()
-
-    # Make a simple EE request
-    # logging.debug(ee.Number(1).getInfo())
