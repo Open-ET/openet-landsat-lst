@@ -27,22 +27,21 @@ def test_ee_init():
         'LANDSAT/LC09/C02/T1_L2/LC09_044033_20220127',
     ]
 )
-def test_Landsat_C02_SR_band_names(image_id):
-    output = openet.sharpen.Landsat_C02_SR(image_id).image.bandNames().getInfo()
+def test_Landsat_C02_L2_band_names(image_id):
+    output = openet.sharpen.Landsat_C02_L2(image_id).image.bandNames().getInfo()
     assert set(output) == set(DEFAULT_BANDS)
 
 
-# CGM - Eventually we should switch and use SPACECRAFT_ID instead of SATELLITE
-def test_Landsat_C02_SR_properties():
+def test_Landsat_C02_L2_properties():
     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
-    output = openet.sharpen.Landsat_C02_SR(image_id=image_id).image.getInfo()
+    output = openet.sharpen.Landsat_C02_L2(image_id=image_id).image.getInfo()
     assert output['properties']['SATELLITE'] == 'LANDSAT_8'
 
 
-def test_Landsat_C02_SR_scaling():
+def test_Landsat_C02_L2_scaling():
     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
     output = utils.point_image_value(
-        openet.sharpen.Landsat_C02_SR(image_id).image, xy=(-121.5265, 38.7399))
+        openet.sharpen.Landsat_C02_L2(image_id).image, xy=(-121.5265, 38.7399))
     assert abs(output['nir'] - 0.26) <= 0.01
     assert abs(output['tir'] - 306) <= 1
 
