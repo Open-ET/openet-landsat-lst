@@ -32,6 +32,7 @@ class Landsat_C02_L2(Model):
         elif (image_id.startswith('LANDSAT/') and
                 not re.match('LANDSAT/L[TEC]0[45789]/C02/T1_L2', image_id)):
             raise ValueError('unsupported collection ID')
+
         raw_image = ee.Image(image_id)
 
         # CGM - Testing out not setting any self. parameters and passing inputs
@@ -52,12 +53,12 @@ class Landsat_C02_L2(Model):
             'LANDSAT_9': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
                           'ST_B10', 'QA_PIXEL'],
         })
-        output_bands = [
-            'blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'pixel_qa']
+        output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'qa']
 
         # # Cloud mask function must be passed with raw/unnamed image
         # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(
-        #     raw_image, **cloudmask_args)
+        #     raw_image, **cloudmask_args
+        # )
 
         input_image = (
             raw_image
