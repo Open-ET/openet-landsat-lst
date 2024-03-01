@@ -1,6 +1,7 @@
 import re
 
 import ee
+import openet.core
 
 from .model import Model
 
@@ -13,17 +14,17 @@ class Landsat(object):
     #     """"""
     #     pass
 
-    def __new__(cls, image_id):
+    def __new__(cls, image_id, c2_lst_correct=False):
         if type(image_id) is not str:
             raise ValueError('unsupported input type')
         elif re.match('LANDSAT/L[TEC]0[45789]/C02/T1_L2', image_id):
-            return Landsat_C02_L2(image_id)
+            return Landsat_C02_L2(image_id, c2_lst_correct=c2_lst_correct)
         else:
             raise ValueError('unsupported image_id')
 
 
 class Landsat_C02_L2(Model):
-    def __init__(self, image_id):
+    def __init__(self, image_id, c2_lst_correct=False):
         """"""
         # TODO: Support input being an ee.Image
         # For now assume input is always an image ID
@@ -53,14 +54,16 @@ class Landsat_C02_L2(Model):
             'LANDSAT_9': ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7',
                           'ST_B10', 'QA_PIXEL'],
         })
-        output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'tir', 'qa']
+        output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst', 'qa']
 
+        # # CGM - We are intentionally not masking for clouds in the LST
         # # Cloud mask function must be passed with raw/unnamed image
         # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(
         #     raw_image, **cloudmask_args
         # )
 
-        input_image = (
+        # Prep image to 0-1 surface reflectance values
+        prep_image = (
             raw_image
             .select(input_bands.get(spacecraft_id), output_bands)
             .multiply([0.0000275, 0.0000275, 0.0000275, 0.0000275,
@@ -72,7 +75,14 @@ class Landsat_C02_L2(Model):
                   })
         )
 
+        # Compute the emissivity corrected LST and add to the prepped image
+        if c2_lst_correct:
+            lst = openet.core.common.landsat_c2_sr_lst_correct(
+                raw_image, prep_image.normalizedDifference(['nir', 'red'])
+            )
+            prep_image = prep_image.addBands([lst.rename(['lst'])], overwrite=True)
+
         # CGM - super could be called without the init if we set input_image and
         #   spacecraft_id as properties of self
-        super().__init__(input_image)
+        super().__init__(prep_image)
         # super()

@@ -78,7 +78,7 @@ class Model:
         # Aggregate the TIR band (result of the cubic convolution interpolation)
         # Convert to brightness temperature or radiance
         tir = (
-            self.image.select(['tir'])
+            self.image.select(['lst'])
             .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True)
             .reproject(crs=crs, crsTransform=tir_transform)
             .pow(4)
@@ -147,11 +147,11 @@ class Model:
         rf = (
             ee.Classifier.smileRandomForest(100, 4, 50)
             .setOutputMode('REGRESSION')
-            .train(samples, 'tir', bands)
+            .train(samples, 'lst', bands)
         )
 
         # Apply RF to local resolution (SR bands)
-        tir_sp_global = self.image.classify(rf, 'tir_pred').pow(0.25)
+        tir_sp_global = self.image.classify(rf, 'lst_pred').pow(0.25)
 
         """ Residual analysis """
         # Aggregate local model results to tir resolution
@@ -207,7 +207,7 @@ class Model:
         )
         # Aggregate original TIR image
         tir_org_agg = (
-            self.image.select(['tir'])
+            self.image.select(['lst'])
             .pow(4)
             .reduceResolution(ee.Reducer.mean())
             .reproject(crs=crs, crsTransform=ec_transform)
