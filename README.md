@@ -1,4 +1,4 @@
-# Landsat Thermal Band Sharpening Algorithms
+# Landsat LST Sharpening Algorithms
 
 The thermal sharpening algorithm is developed for Landsat 5, 7, 8, or 9. The algorithm has three components.  
 

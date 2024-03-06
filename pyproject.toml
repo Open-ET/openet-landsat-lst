@@ -1,5 +1,5 @@
 [project]
-name = "openet-sharpen"
+name = "openet-landsat-lst"
 version = "0.2.0"
 authors = [
     { name = "Yanghui Kang", email = "ykang38@wisc.edu" },
@@ -8,10 +8,10 @@ authors = [
 maintainers = [
     { name = "Charles Morton", email = "charles.morton@dri.edu" },
 ]
-description = "Earth Engine based Landsat thermal band sharpening functions"
+description = "Earth Engine based Landsat LST sharpening functions"
 readme = "README.md"
 requires-python = ">=3.8"
-keywords = ["LST", "TIR", "Landsat", "OpenET", "Earth Engine", "Evapotranspiration"]
+keywords = ["LST", "OpenET", "Earth Engine", "Evapotranspiration", "Landsat"]
 license = {text = "Apache-2.0"}
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -24,11 +24,11 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/Open-ET/openet-sharpen"
-# "Repository" = "https://github.com/Open-ET/openet-sharpen.git"
-# "Documentation" = "https://github.com/Open-ET/openet-sharpen"
-# "Bug Tracker" = "https://github.com/Open-ET/openet-sharpen"
-# "Changelog" = "https://github.com/Open-ET/openet-sharpen"
+"Homepage" = "https://github.com/Open-ET/openet-landsat-lst"
+# "Repository" = "https://github.com/Open-ET/openet-landsat-lst.git"
+# "Documentation" = "https://github.com/Open-ET/openet-landsat-lst"
+# "Bug Tracker" = "https://github.com/Open-ET/openet-landsat-lst"
+# "Changelog" = "https://github.com/Open-ET/openet-landsat-lst"
 
 [build-system]
 requires = ["setuptools>=61.0"]

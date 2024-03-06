@@ -35,7 +35,7 @@ class Model:
 
     # TODO: Decide if this should be a lazy property since it doesn't have inputs
     # @lazy_property
-    def thermal(self):
+    def sharpen(self):
         """Thermal sharpening algorithm
 
         Global-RF and local-SLR and a residual redistribution process
@@ -126,8 +126,8 @@ class Model:
             .reproject(crs, transform)
         )
 
-        # CGM - Not used below
-        rmse = local_fit.select('residuals').arrayFlatten([['residuals']]).pow(0.25)
+        # CGM - Not used below, commenting out
+        # rmse = local_fit.select('residuals').arrayFlatten([['residuals']]).pow(0.25)
 
         # Apply linear fit at high resolution for sharpened TIR
         inputs = (
@@ -222,7 +222,7 @@ class Model:
         tir_sp_ec = tir_sp_final.subtract(res_conv)
 
         # Prepare output
-        out = tir_sp_ec.rename(['tir_sharpened'])
+        out = tir_sp_ec.rename(['lst_sharpened'])
 
         # # TODO: Add flag/parameter to control if all bands are exported
         # out = (

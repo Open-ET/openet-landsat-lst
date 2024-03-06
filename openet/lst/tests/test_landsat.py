@@ -4,7 +4,7 @@ import pprint
 import ee
 import pytest
 
-import openet.sharpen
+import openet.lst
 import openet.core.utils as utils
 
 logging.basicConfig(level=logging.DEBUG, format='%(message)s')
@@ -28,20 +28,20 @@ def test_ee_init():
     ]
 )
 def test_Landsat_C02_L2_band_names(image_id):
-    output = openet.sharpen.Landsat_C02_L2(image_id).image.bandNames().getInfo()
+    output = openet.lst.Landsat_C02_L2(image_id).image.bandNames().getInfo()
     assert set(output) == set(DEFAULT_BANDS)
 
 
 def test_Landsat_C02_L2_properties():
     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
-    output = openet.sharpen.Landsat_C02_L2(image_id=image_id).image.getInfo()
+    output = openet.lst.Landsat_C02_L2(image_id=image_id).image.getInfo()
     assert output['properties']['SPACECRAFT_ID'] == 'LANDSAT_8'
 
 
 def test_Landsat_C02_L2_scaling():
     image_id = 'LANDSAT/LC08/C02/T1_L2/LC08_044033_20170716'
     output = utils.point_image_value(
-        openet.sharpen.Landsat_C02_L2(image_id).image, xy=(-121.5265, 38.7399))
+        openet.lst.Landsat_C02_L2(image_id).image, xy=(-121.5265, 38.7399))
     assert abs(output['nir'] - 0.26) <= 0.01
     assert abs(output['lst'] - 306) <= 1
 
@@ -54,7 +54,7 @@ def test_Landsat_C02_L2_scaling():
     ]
 )
 def test_Landsat_band_names(image_id):
-    output = openet.sharpen.Landsat(image_id).image.bandNames().getInfo()
+    output = openet.lst.Landsat(image_id).image.bandNames().getInfo()
     assert set(output) == set(DEFAULT_BANDS)
 
 
@@ -74,6 +74,6 @@ def test_Landsat_band_names(image_id):
     ]
 )
 def test_Landsat_c2_lst_correction_flag(image_id, xy, expected, tol=1):
-    output_img = openet.sharpen.Landsat(image_id, c2_lst_correct=True).image
+    output_img = openet.lst.Landsat(image_id, c2_lst_correct=True).image
     corrected = utils.point_image_value(output_img, xy, scale=30)
     assert abs(corrected['lst'] - expected) <= tol
