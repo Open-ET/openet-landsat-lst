@@ -21,6 +21,7 @@ classifiers = [
 dependencies = [
     "earthengine-api >= 0.1.367, < 0.1.392",
     "openet-core >= 0.2.0",
+    "google-api-python-client <= 2.120.0",
 ]
 
 [project.urls]
