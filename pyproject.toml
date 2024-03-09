@@ -1,6 +1,6 @@
 [project]
 name = "openet-landsat-lst"
-version = "0.2.0"
+version = "0.2.1"
 authors = [
     { name = "Yanghui Kang", email = "ykang38@wisc.edu" },
     { name = "Yun Yang", email = "yun.yang@msstate.edu" },
@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "earthengine-api >= 0.1.367",
-    "openet-core >= 0.2.0",
+    "openet-core >= 0.4.0",
 ]
 
 [project.urls]

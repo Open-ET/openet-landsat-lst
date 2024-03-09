@@ -25,7 +25,7 @@ def test_Model_init():
 
 
 def test_Model_thermal_band_name():
-    input_img = openet.lst.Landsat(TEST_IMAGE_ID).image
+    input_img = openet.lst.Landsat(TEST_IMAGE_ID, c2_lst_correct=False).image
     output = openet.lst.Model(input_img).sharpen().bandNames().getInfo()
     assert output == ['lst_sharpened']
 
@@ -49,7 +49,7 @@ def test_Model_thermal_band_name():
     ]
 )
 def test_Model_thermal_point_values(image_id, xy, expected, tol=0.01):
-    input_img = openet.lst.Landsat(image_id).image
+    input_img = openet.lst.Landsat(image_id, c2_lst_correct=False).image
     output_img = openet.lst.Model(input_img).sharpen()
     output = utils.point_image_value(output_img, xy, scale=30)
     assert abs(output['lst_sharpened'] - expected) < tol

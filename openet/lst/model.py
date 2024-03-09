@@ -25,8 +25,8 @@ class Model:
         ----------
         image : ee.Image
             "Prepped" Landsat image with standardized bands names
-                (i.e. blue, green, red, nir, swir1, swir2, tir).
-            Thermal band must be named 'tir' and be in units of Kelvin.
+                (i.e. blue, green, red, nir, swir1, swir2, lst).
+            Thermal band must be named 'lst' and be in units of Kelvin.
             Must have property 'SPACECRAFT_ID' with a value of 'LANDSAT_4',
                 'LANDSAT_5', 'LANDSAT_7', 'LANDSAT_8', or 'LANDSAT_9'.
 
@@ -101,11 +101,10 @@ class Model:
         other_cv = other_std.divide(other_mean).reduce(ee.Reducer.mean())
 
         # Add a bias band (=1) to the image for linear regression reducer
-        image_agg = (
-            other_mean
-            .addBands(other_mean.select([0]).multiply(0).add(1).rename(['bias']))
-            .addBands(tir)
-        )
+        # Add the LST image back in
+        image_agg = other_mean.addBands([
+            other_mean.select([0]).multiply(0).add(1).rename(['bias']), tir
+        ])
 
         # Fit moving-window linear regressions at coarse resolution
         # Y: tir (power 4)
@@ -130,10 +129,9 @@ class Model:
         # rmse = local_fit.select('residuals').arrayFlatten([['residuals']]).pow(0.25)
 
         # Apply linear fit at high resolution for sharpened TIR
-        inputs = (
-            self.image.select(bands)
-            .addBands(self.image.select([0]).multiply(0).add(1).rename(['bias']))
-        )
+        inputs = self.image.select(bands).addBands([
+            self.image.select([0]).multiply(0).add(1).rename(['bias'])
+        ])
         tir_sp_local = inputs.multiply(coefficients).reduce(ee.Reducer.sum()).pow(0.25)
 
         # Fit a scene-wise random forest model
