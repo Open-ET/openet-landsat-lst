@@ -1,5 +1,4 @@
 import logging
-import pprint
 
 import ee
 import pytest
@@ -10,7 +9,6 @@ import openet.core.utils as utils
 logging.basicConfig(level=logging.DEBUG, format='%(message)s')
 
 DEFAULT_BANDS = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2', 'lst']
-
 
 
 def test_ee_init():
