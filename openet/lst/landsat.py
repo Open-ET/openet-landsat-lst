@@ -53,8 +53,11 @@ class Landsat_C02_L2(Model):
         output_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']
 
         lst_band = ee.Dictionary({
-            'LANDSAT_4': 'ST_B6', 'LANDSAT_5': 'ST_B6', 'LANDSAT_7': 'ST_B6',
-            'LANDSAT_8': 'ST_B10', 'LANDSAT_9': 'ST_B10',
+            'LANDSAT_4': 'ST_B6',
+            'LANDSAT_5': 'ST_B6',
+            'LANDSAT_7': 'ST_B6',
+            'LANDSAT_8': 'ST_B10',
+            'LANDSAT_9': 'ST_B10',
         })
 
         # # CGM - We are intentionally not masking for clouds in the LST
@@ -64,7 +67,7 @@ class Landsat_C02_L2(Model):
         # )
 
         # Prep image to 0-1 surface reflectance values
-        prep_img = (
+        sr_img = (
             raw_image
             .select(input_bands.get(spacecraft_id), output_bands)
             .multiply([0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275, 0.0000275])
@@ -74,20 +77,20 @@ class Landsat_C02_L2(Model):
                   'SPACECRAFT_ID': spacecraft_id,
                   })
         )
+        # TODO: Convert to using openet.core.landsat.c02_l2_sr() to prep
+        # sr_img = openet.core.landsat.c02_l2_sr(input_img).select(output_bands)
 
         # Compute the emissivity corrected LST and add to the prepped image
         #   or add the raw LST to the prepped image
         if c2_lst_correct:
-            lst_img = openet.core.common.landsat_c2_sr_lst_correct(
-                raw_image, prep_img.normalizedDifference(['nir', 'red'])
-            )
+            lst_img = openet.core.common.landsat_c2_sr_lst_correct(raw_image)
         else:
             lst_img = (
                 raw_image.select([ee.String(lst_band.get(spacecraft_id))])
                 .multiply(0.00341802).add(149.0)
             )
 
-        init_img = prep_img.addBands(lst_img.rename(['lst']))
+        init_img = sr_img.addBands(lst_img.rename(['lst']))
 
         # CGM - super could be called without the init if we set input_image and
         #   spacecraft_id as properties of self

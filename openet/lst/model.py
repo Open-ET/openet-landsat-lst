@@ -119,7 +119,7 @@ class Model:
         band_names = bands.copy()
         band_names.extend(['bias'])
         coefficients = (
-            local_fit.select('coefficients')
+            local_fit.select(['coefficients'])
             .arrayProject([0])
             .arrayFlatten([band_names])
             .reproject(crs, transform)
@@ -129,9 +129,10 @@ class Model:
         # rmse = local_fit.select('residuals').arrayFlatten([['residuals']]).pow(0.25)
 
         # Apply linear fit at high resolution for sharpened TIR
-        inputs = self.image.select(bands).addBands([
-            self.image.select([0]).multiply(0).add(1).rename(['bias'])
-        ])
+        inputs = (
+            self.image.select(bands)
+            .addBands([self.image.select([0]).multiply(0).add(1).rename(['bias'])])
+        )
         tir_sp_local = inputs.multiply(coefficients).reduce(ee.Reducer.sum()).pow(0.25)
 
         # Fit a scene-wise random forest model
@@ -222,33 +223,14 @@ class Model:
         # Prepare output
         out = tir_sp_ec.rename(['lst_sharpened'])
 
-        # # TODO: Add flag/parameter to control if all bands are exported
-        # out = (
-        #     out.addBands(tir_sp_final.rename(['tir_sharpened_non_ec']))
-        #     .addBands(image.select('tir').rename(['tir_original']))
-        #     .addBands(tir_sp_local.rename(['tir_sp_local']))
-        #     .addBands(tir_sp_global.rename(['tir_sp_global']))
-        #     .addBands(weight_local.rename(['local_weights']))
-        #     .addBands(rmse.rename(['slr_rmse']))
-        # )
-
-        # CGM - Commenting out adding the other bands for now
-        # out = (
-        #     out.addBands(image.select('tir').rename(['tir_original']))
-        #     .addBands(tir.pow(0.25).rename(['tir_agg']))
-        #     .addBands(tir_sp_local.rename(['tir_sp_local']))
-        #     .addBands(tir_sp_global.rename(['tir_sp_global']))
-        #     .addBands(local_agg.rename(['tir_local_agg']))
-        #     .addBands(global_agg.rename(['tir_global_agg']))
-        #     .addBands(weight_local.rename(['local_weights']))
-        #     .addBands(rmse.rename(['slr_rmse']))
-        # )
-
-        # CGM - copyProperties sometimes drops the type
-        out = ee.Image(out.copyProperties(self.image)) \
-            .set({'system:time_start': self.image.get('system:time_start'),
-                  'energy_conservation': 'True',
-                  })
+        # Recast to an image since copyProperties sometimes drops the type
+        out = (
+            ee.Image(out.copyProperties(self.image))
+            .set({
+                'system:time_start': self.image.get('system:time_start'),
+                'energy_conservation': 'True',
+            })
+        )
 
         return out
 

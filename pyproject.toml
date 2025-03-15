@@ -1,6 +1,6 @@
 [project]
 name = "openet-landsat-lst"
-version = "0.2.1"
+version = "0.3.0"
 authors = [
     { name = "Yanghui Kang", email = "ykang38@wisc.edu" },
     { name = "Yun Yang", email = "yun.yang@msstate.edu" },
@@ -10,7 +10,7 @@ maintainers = [
 ]
 description = "Earth Engine based Landsat LST sharpening functions"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 keywords = ["LST", "OpenET", "Earth Engine", "Evapotranspiration", "Landsat"]
 license = {text = "Apache-2.0"}
 classifiers = [
@@ -19,8 +19,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "earthengine-api >= 0.1.367",
-    "openet-core >= 0.4.0",
+    "earthengine-api >= 1.5.2",
+    "openet-core >= 0.7.0",
 ]
 
 [project.urls]
