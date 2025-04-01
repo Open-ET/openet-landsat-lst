@@ -8,7 +8,7 @@ from .model import Model
 
 class Landsat(object):
     # CGM - Using the __new__ to return is discouraged and is probably not
-    #   great Python but it was the only way I could find to make the general
+    #   great Python, but it was the only way I could find to make the general
     #   Landsat class directly callable like the collection specific ones
     # def __init__(self):
     #     """"""
@@ -26,7 +26,7 @@ class Landsat(object):
 class Landsat_C02_L2(Model):
     def __init__(self, image_id, c2_lst_correct=True):
         """"""
-        # TODO: Support input being an ee.Image
+        # TODO: Add support for input being an ee.Image
         # For now assume input is always an image ID
         if type(image_id) is not str:
             raise ValueError('unsupported input type')
@@ -35,9 +35,6 @@ class Landsat_C02_L2(Model):
             raise ValueError('unsupported collection ID')
 
         raw_image = ee.Image(image_id)
-
-        # CGM - Testing out not setting any self. parameters and passing inputs
-        #   to the super().__init__() call instead
 
         spacecraft_id = ee.String(raw_image.get('SPACECRAFT_ID'))
 
@@ -62,9 +59,7 @@ class Landsat_C02_L2(Model):
 
         # # CGM - We are intentionally not masking for clouds in the LST
         # # Cloud mask function must be passed with raw/unnamed image
-        # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(
-        #     raw_image, **cloudmask_args
-        # )
+        # cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(raw_image, **cloudmask_args)
 
         # Prep image to 0-1 surface reflectance values
         sr_img = (

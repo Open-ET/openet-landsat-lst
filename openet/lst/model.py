@@ -1,22 +1,6 @@
 import ee
 
 
-# def lazy_property(fn):
-#     """Decorator that makes a property lazy-evaluated
-#
-#     https://stevenloria.com/lazy-properties/
-#     """
-#     attr_name = '_lazy_' + fn.__name__
-#
-#     @property
-#     def _lazy_property(self):
-#         if not hasattr(self, attr_name):
-#             setattr(self, attr_name, fn(self))
-#         return getattr(self, attr_name)
-#
-#     return _lazy_property
-
-
 class Model:
     def __init__(self, image):
         """
@@ -33,8 +17,6 @@ class Model:
         """
         self.image = image
 
-    # TODO: Decide if this should be a lazy property since it doesn't have inputs
-    # @lazy_property
     def sharpen(self):
         """Thermal sharpening algorithm
 
@@ -68,7 +50,7 @@ class Model:
         })
         ec_window = ee.Number(ec_window_dict.get(self.image.get('SPACECRAFT_ID')))
 
-        kernel_size = 20  # kernel radius for local linear regression,
+        kernel_size = 12  # kernel radius for local linear regression,
         # lower values for more heterogeneous areas
         cv_threshold = 0.15  # threshold to select homogeneous pixels
         bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']  # predictor bands

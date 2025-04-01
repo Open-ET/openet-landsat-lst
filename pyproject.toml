@@ -25,10 +25,6 @@ dependencies = [
 
 [project.urls]
 "Homepage" = "https://github.com/Open-ET/openet-landsat-lst"
-# "Repository" = "https://github.com/Open-ET/openet-landsat-lst.git"
-# "Documentation" = "https://github.com/Open-ET/openet-landsat-lst"
-# "Bug Tracker" = "https://github.com/Open-ET/openet-landsat-lst"
-# "Changelog" = "https://github.com/Open-ET/openet-landsat-lst"
 
 [build-system]
 requires = ["setuptools>=61.0"]
