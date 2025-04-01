@@ -50,15 +50,21 @@ class Model:
 
         """
         tir_res_dict = ee.Dictionary({
-            'LANDSAT_4': 120, 'LANDSAT_5': 120, 'LANDSAT_7': 60,
-            'LANDSAT_8': 100, 'LANDSAT_9': 100,
+            'LANDSAT_4': 120,
+            'LANDSAT_5': 120,
+            'LANDSAT_7': 60,
+            'LANDSAT_8': 100,
+            'LANDSAT_9': 100,
         })
         tir_res = ee.Number(tir_res_dict.get(self.image.get('SPACECRAFT_ID')))
 
         # Apply energy conservation step with a slighter large window to reduce blurry effect
         ec_window_dict = ee.Dictionary({
-            'LANDSAT_4': 120, 'LANDSAT_5': 120, 'LANDSAT_7': 90,
-            'LANDSAT_8': 120, 'LANDSAT_9': 120,
+            'LANDSAT_4': 120,
+            'LANDSAT_5': 120,
+            'LANDSAT_7': 90,
+            'LANDSAT_8': 120,
+            'LANDSAT_9': 120,
         })
         ec_window = ee.Number(ec_window_dict.get(self.image.get('SPACECRAFT_ID')))
 
@@ -85,20 +91,24 @@ class Model:
         )
 
         # Aggregating predictor bands for mean value
-        other = self.image.select(bands)
         other_mean = (
-            other.reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True)
+            self.image.select(bands)
+            .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=True)
             .reproject(crs=crs, crsTransform=tir_transform)
         )
 
         # Aggregating predictor bands for std value
         other_std = (
-            other.reduceResolution(reducer=ee.Reducer.stdDev(), bestEffort=True)
+            self.image.select(bands)
+            .reduceResolution(reducer=ee.Reducer.stdDev(), bestEffort=True)
             .reproject(crs=crs, crsTransform=tir_transform)
         )
 
         # Compute the coefficient of variation of sub-pixel reflectance
-        other_cv = other_std.divide(other_mean).reduce(ee.Reducer.mean())
+        other_cv = (
+            other_std.divide(other_mean).reduce(ee.Reducer.mean())
+            .setDefaultProjection(crs, transform)
+        )
 
         # Add a bias band (=1) to the image for linear regression reducer
         # Add the LST image back in
@@ -188,7 +198,8 @@ class Model:
         tir_sp_final = (
             tir_sp_local.pow(4).multiply(weight_local)
             .add(tir_sp_global.pow(4).multiply(weight_global))
-            .multiply(valid_mask).pow(0.25)
+            .multiply(valid_mask)
+            .pow(0.25)
         )
         # Local residual is 0
         tir_sp_final = tir_sp_final.add(tir_sp_local.multiply(res_local.eq(0)))
