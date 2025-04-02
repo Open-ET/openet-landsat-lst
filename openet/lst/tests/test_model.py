@@ -35,15 +35,15 @@ def test_Model_thermal_band_name():
         # Arbitrary test image and locations
         [
             'LANDSAT/LC08/C02/T1_L2/LC08_042034_20180705',
-            [-120.10237, 36.946608], 308.92823406857735
+            [-120.10237, 36.946608], 308.6364
         ],
         [
             'LANDSAT/LC09/C02/T1_L2/LC09_044033_20220127',
-            [-121.5265, 38.7399], 282.92858326583377
+            [-121.5265, 38.7399], 282.9366
         ],
     ]
 )
-def test_Model_thermal_point_values(image_id, xy, expected, tol=0.01):
+def test_Model_thermal_point_values(image_id, xy, expected, tol=0.001):
     input_img = openet.lst.Landsat(image_id, c2_lst_correct=False).image
     output_img = openet.lst.Model(input_img).sharpen()
     output = utils.point_image_value(output_img, xy, scale=30)
