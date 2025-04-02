@@ -50,7 +50,7 @@ class Model:
         })
         ec_window = ee.Number(ec_window_dict.get(self.image.get('SPACECRAFT_ID')))
 
-        kernel_size = 12  # kernel radius for local linear regression,
+        kernel_size = 10  # kernel radius for local linear regression,
         # lower values for more heterogeneous areas
         cv_threshold = 0.15  # threshold to select homogeneous pixels
         bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']  # predictor bands
